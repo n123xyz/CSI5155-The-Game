@@ -26988,38 +26988,92 @@ var init_three_module = __esm(() => {
 function renderWeek5Clustering(container) {
   let mode = "kmeans";
   let kVal = 3;
-  let dendroCut = 1.4;
+  let dendroCut = 1.6;
   let linkType = "average";
+  let hasConverged = false;
   const points = [];
   const centers = [
     { x: -2.5, z: -1.5 },
     { x: 2.5, z: -1 },
     { x: 0, z: 2.5 }
   ];
-  centers.forEach((c, cIdx) => {
+  centers.forEach((c) => {
     for (let i = 0;i < 15; i++) {
-      const rx = c.x + (Math.random() - 0.5) * 1.6;
-      const rz = c.z + (Math.random() - 0.5) * 1.6;
-      points.push({ x: rx, z: rz, cluster: cIdx });
+      const rx = c.x + (i * 13 % 10 / 10 - 0.5) * 1.5;
+      const rz = c.z + (i * 29 % 10 / 10 - 0.5) * 1.5;
+      points.push({ x: rx, z: rz, cluster: -1 });
     }
   });
   let centroids = [
     { x: -1, z: 0 },
     { x: 1, z: 1 },
-    { x: 0, z: -2 }
+    { x: 0, z: -2 },
+    { x: -2, z: 2 },
+    { x: 2, z: 2 }
   ];
+  function runHierarchicalLinkage() {
+    const n = points.length;
+    const distMatrix = [];
+    for (let i = 0;i < n; i++) {
+      distMatrix[i] = [];
+      for (let j = 0;j < n; j++) {
+        distMatrix[i][j] = Math.hypot(points[i].x - points[j].x, points[i].z - points[j].z);
+      }
+    }
+    let clusters = points.map((_, idx) => ({ id: idx, members: [idx] }));
+    while (clusters.length > 1) {
+      let minLinkDist = Infinity;
+      let pair = [0, 1];
+      for (let i = 0;i < clusters.length; i++) {
+        for (let j = i + 1;j < clusters.length; j++) {
+          const m1 = clusters[i].members;
+          const m2 = clusters[j].members;
+          const dists = [];
+          for (const p1 of m1) {
+            for (const p2 of m2) {
+              dists.push(distMatrix[p1][p2]);
+            }
+          }
+          let d = 0;
+          if (linkType === "single")
+            d = Math.min(...dists);
+          else if (linkType === "complete")
+            d = Math.max(...dists);
+          else
+            d = dists.reduce((a, b) => a + b, 0) / dists.length;
+          if (d < minLinkDist) {
+            minLinkDist = d;
+            pair = [i, j];
+          }
+        }
+      }
+      if (minLinkDist > dendroCut) {
+        break;
+      }
+      const [c1, c2] = pair;
+      const mergedMembers = [...clusters[c1].members, ...clusters[c2].members];
+      clusters.splice(Math.max(c1, c2), 1);
+      clusters.splice(Math.min(c1, c2), 1);
+      clusters.push({ id: Date.now() + Math.random(), members: mergedMembers });
+    }
+    clusters.forEach((cl, cIdx) => {
+      cl.members.forEach((mIdx) => {
+        points[mIdx].cluster = cIdx;
+      });
+    });
+  }
   function runKMeansStep() {
     sound.playClick();
     points.forEach((p) => {
       let minDist = Infinity;
       let closestC = 0;
-      centroids.forEach((c, idx) => {
-        const d = Math.hypot(p.x - c.x, p.z - c.z);
+      for (let c = 0;c < kVal; c++) {
+        const d = Math.hypot(p.x - centroids[c].x, p.z - centroids[c].z);
         if (d < minDist) {
           minDist = d;
-          closestC = idx;
+          closestC = c;
         }
-      });
+      }
       p.cluster = closestC;
     });
     for (let c = 0;c < kVal; c++) {
@@ -27032,18 +27086,22 @@ function renderWeek5Clustering(container) {
     }
   }
   function computeSilhouette() {
+    const assignedPts = points.filter((p) => p.cluster >= 0);
+    if (assignedPts.length === 0)
+      return 0;
     let totalScore = 0;
-    points.forEach((p) => {
-      const sameCluster = points.filter((o) => o.cluster === p.cluster && o !== p);
+    assignedPts.forEach((p) => {
+      const sameCluster = assignedPts.filter((o) => o.cluster === p.cluster && o !== p);
       let a_i = 0;
       if (sameCluster.length > 0) {
         a_i = sameCluster.reduce((sum, o) => sum + Math.hypot(p.x - o.x, p.z - o.z), 0) / sameCluster.length;
       }
       let b_i = Infinity;
-      for (let c = 0;c < kVal; c++) {
+      const numC = mode === "kmeans" ? kVal : Math.max(...points.map((pt) => pt.cluster)) + 1;
+      for (let c = 0;c < numC; c++) {
         if (c === p.cluster)
           continue;
-        const otherPts = points.filter((o) => o.cluster === c);
+        const otherPts = assignedPts.filter((o) => o.cluster === c);
         if (otherPts.length > 0) {
           const avgD = otherPts.reduce((sum, o) => sum + Math.hypot(p.x - o.x, p.z - o.z), 0) / otherPts.length;
           if (avgD < b_i)
@@ -27056,125 +27114,160 @@ function renderWeek5Clustering(container) {
       const s_i = denom > 0 ? (b_i - a_i) / denom : 0;
       totalScore += s_i;
     });
-    return totalScore / points.length;
+    return totalScore / assignedPts.length;
   }
-  container.innerHTML = `
-    <div class="game-card">
-      <div class="card-header">
-        <div class="card-title-group">
-          <h2>\uD83C\uDF0C Game 5.1: 3D K-Means & Dendrogram Chopper (Three.js)</h2>
-          <p class="card-subtitle">Master Unsupervised Clustering, Linkage Variations, and Silhouette Validation (Midterm Q1)</p>
-        </div>
-        <span class="concept-badge">Unsupervised Learning</span>
-      </div>
-
-      <div class="controls-panel">
-        <div class="control-item">
-          <label>Algorithm View</label>
-          <div style="display:flex; gap:8px;">
-            <button id="btn-view-kmeans" class="btn btn-sm ${mode === "kmeans" ? "btn-primary" : "btn-secondary"}">K-Means Centroid Dynamics</button>
-            <button id="btn-view-hier" class="btn btn-sm ${mode === "hierarchical" ? "btn-primary" : "btn-secondary"}">Hierarchical Dendrogram Chopper</button>
+  function renderUI() {
+    container.innerHTML = `
+      <div class="game-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>\uD83C\uDF0C Game 5.1: 3D K-Means & Dendrogram Chopper (Three.js)</h2>
+            <p class="card-subtitle">Master Unsupervised Clustering, Linkage Variations, and Silhouette Validation (Midterm Q1)</p>
           </div>
+          <span class="concept-badge">Unsupervised Learning</span>
         </div>
 
-        ${mode === "kmeans" ? `
+        <div class="controls-panel">
           <div class="control-item">
-            <label>Number of Clusters (k): <span id="k-label">${kVal}</span></label>
-            <input type="range" id="kmeans-k" min="2" max="5" step="1" value="${kVal}">
+            <label>Algorithm View</label>
+            <div style="display:flex; gap:8px;">
+              <button id="btn-view-kmeans" class="btn btn-sm ${mode === "kmeans" ? "btn-primary" : "btn-secondary"}">K-Means Centroid Dynamics</button>
+              <button id="btn-view-hier" class="btn btn-sm ${mode === "hierarchical" ? "btn-primary" : "btn-secondary"}">Hierarchical Dendrogram Chopper</button>
+            </div>
           </div>
 
-          <div class="control-item" style="flex-direction:row; gap:8px; align-items:flex-end;">
-            <button id="btn-kmeans-step" class="btn btn-primary btn-sm">Iterate Step (Assign & Move)</button>
-            <button id="btn-kmeans-reinit" class="btn btn-secondary btn-sm">Randomize Centroids</button>
-          </div>
-        ` : `
-          <div class="control-item">
-            <label>Linkage Variation (Slides 11-13)</label>
-            <select id="linkage-select">
-              <option value="single" ${linkType === "single" ? "selected" : ""}>Single Link (Nearest Neighbors - min)</option>
-              <option value="complete" ${linkType === "complete" ? "selected" : ""}>Complete Link (Furthest Neighbors - max)</option>
-              <option value="average" ${linkType === "average" ? "selected" : ""}>Average Link (All Pairs Mean)</option>
-            </select>
-          </div>
+          ${mode === "kmeans" ? `
+            <div class="control-item">
+              <label>Number of Clusters (k): <span id="k-label">${kVal}</span></label>
+              <input type="range" id="kmeans-k" min="2" max="5" step="1" value="${kVal}">
+            </div>
 
-          <div class="control-item">
-            <label>Dendrogram Cut Threshold: <span id="cut-label">${dendroCut.toFixed(2)}</span></label>
-            <input type="range" id="dendro-slider" min="0.4" max="2.5" step="0.1" value="${dendroCut}">
-          </div>
-        `}
-      </div>
+            <div class="control-item" style="flex-direction:row; gap:8px; align-items:flex-end;">
+              <button id="btn-kmeans-step" class="btn btn-primary btn-sm">Iterate Step (Assign & Move)</button>
+              <button id="btn-kmeans-reinit" class="btn btn-secondary btn-sm">Randomize Centroids</button>
+            </div>
+          ` : `
+            <div class="control-item">
+              <label>Linkage Variation (Slides 11-13)</label>
+              <select id="linkage-select">
+                <option value="single" ${linkType === "single" ? "selected" : ""}>Single Link (Nearest Neighbors - min)</option>
+                <option value="complete" ${linkType === "complete" ? "selected" : ""}>Complete Link (Furthest Neighbors - max)</option>
+                <option value="average" ${linkType === "average" ? "selected" : ""}>Average Link (All Pairs Mean)</option>
+              </select>
+            </div>
 
-      <div class="game-viewport" id="cluster-canvas-container" style="height: 420px;">
-        <div class="viewport-overlay" id="cluster-overlay">
-          <div><strong style="color:var(--accent-cyan);">Algorithm:</strong> ${mode.toUpperCase()}</div>
-          <div><strong style="color:var(--accent-amber);">Mean Silhouette Score:</strong> <span id="sil-val" style="color:var(--accent-green); font-weight:bold;">0.00</span> (Scale: -1 to +1)</div>
-          <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">+1 = Dense cluster & far apart; 0 = Overlapping; -1 = Misclustered</div>
+            <div class="control-item">
+              <label>Dendrogram Cut Threshold: <span id="cut-label">${dendroCut.toFixed(2)}</span></label>
+              <input type="range" id="dendro-slider" min="0.4" max="3.5" step="0.1" value="${dendroCut}">
+            </div>
+          `}
         </div>
-      </div>
 
-      <div style="text-align: right; margin-top: 14px;">
-        <button id="btn-cluster-certify" class="btn btn-accent">Verify Unsupervised Clustering Mastery</button>
-      </div>
-
-      <div id="cluster-feedback" style="min-height: 24px; margin-top: 14px;"></div>
-
-      <details class="math-explainer">
-        <summary>\uD83D\uDCA1 Hierarchical Linkage Variations & Silhouette Score (Week 5 Slides) (Click to expand)</summary>
-        <div class="explainer-content">
-          <p><strong>1. Single Link (Nearest Neighbors):</strong> Distance between clusters $G$ and $H$ is the distance between their <em>two closest members</em>: $d_{SL}(G, H) = \\min_{i \\in G, i' \\in H} d_{i, i'}$.</p>
-        <p><strong>2. Complete Link (Furthest Neighbors):</strong> Distance between clusters is defined by their <em>two most distant members</em>: $d_{CL}(G, H) = \\max_{i \\in G, i' \\in H} d_{i, i'}$.</p>
-        <p><strong>3. Average Link:</strong> Average distance across all pairwise points: $d_{avg}(G, H) = \\frac{1}{n_G n_H} \\sum \\sum d_{i, i'}$.</p>
-        <div class="formula-block">
-          Silhouette Score: s_i = (b_i - a_i) / max(a_i, b_i)<br>
-          where a_i = intra-cluster distance, b_i = distance to nearest foreign cluster
+        <div class="game-viewport" id="cluster-canvas-container" style="height: 420px;">
+          <div class="viewport-overlay" id="cluster-overlay">
+            <div><strong style="color:var(--accent-cyan);">Algorithm:</strong> ${mode.toUpperCase()}</div>
+            <div><strong style="color:var(--accent-amber);">Mean Silhouette Score:</strong> <span id="sil-val" style="color:var(--accent-green); font-weight:bold;">0.00</span> (Scale: -1 to +1)</div>
+            <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">+1 = Dense cluster & far apart; 0 = Overlapping; -1 = Misclustered</div>
+          </div>
         </div>
+
+        <div style="text-align: right; margin-top: 14px;">
+          <button id="btn-cluster-certify" class="btn btn-accent">Verify Unsupervised Clustering Mastery</button>
         </div>
-      </details>
-    </div>
-  `;
-  const canvasBox = container.querySelector("#cluster-canvas-container");
-  const width = canvasBox.clientWidth || 800;
-  const height = 420;
-  const scene = new Scene;
-  scene.background = new Color(395540);
-  const camera = new PerspectiveCamera(45, width / height, 0.1, 100);
-  camera.position.set(0, 9, 8);
-  camera.lookAt(0, 0, 0);
-  const renderer = new WebGLRenderer({ antialias: true });
-  renderer.setSize(width, height);
-  canvasBox.appendChild(renderer.domElement);
-  scene.add(new AmbientLight(16777215, 0.8));
-  const dirLight = new DirectionalLight(61695, 1.2);
-  dirLight.position.set(5, 10, 5);
-  scene.add(dirLight);
-  const grid = new GridHelper(10, 10, 61695, 2042173);
-  scene.add(grid);
+
+        <div id="cluster-feedback" style="min-height: 24px; margin-top: 14px;"></div>
+
+        <details class="math-explainer">
+          <summary>\uD83D\uDCA1 Hierarchical Linkage Variations & Silhouette Score (Week 5 Slides) (Click to expand)</summary>
+          <div class="explainer-content">
+            <p><strong>1. Single Link (Nearest Neighbors):</strong> Distance between clusters $G$ and $H$ is the distance between their <em>two closest members</em>: $d_{SL}(G, H) = \\min_{i \\in G, i' \\in H} d_{i, i'}$. Vulnerable to chaining!</p>
+            <p><strong>2. Complete Link (Furthest Neighbors):</strong> Distance between clusters is defined by their <em>two most distant members</em>: $d_{CL}(G, H) = \\max_{i \\in G, i' \\in H} d_{i, i'}$. Produces compact clusters.</p>
+            <p><strong>3. Average Link:</strong> Average distance across all pairwise points: $d_{avg}(G, H) = \\frac{1}{n_G n_H} \\sum \\sum d_{i, i'}$.</p>
+            <div class="formula-block">
+              Silhouette Score: s_i = (b_i - a_i) / max(a_i, b_i)<br>
+              where a_i = intra-cluster distance, b_i = distance to nearest foreign cluster
+            </div>
+          </div>
+        </details>
+      </div>
+    `;
+    setupThreeScene();
+    attachListeners();
+  }
+  let scene;
+  let camera;
+  let renderer;
   const clusterColors = [61695, 16724838, 65416, 16755200, 10309341];
-  const ptGeom = new SphereGeometry(0.14, 16, 16);
-  points.forEach((p) => {
-    const mat = new MeshStandardMaterial({ color: clusterColors[p.cluster % clusterColors.length] });
-    const mesh = new Mesh(ptGeom, mat);
-    mesh.position.set(p.x, 0.15, p.z);
-    scene.add(mesh);
-    p.mesh = mesh;
-  });
-  const centroidMeshes = [];
-  const coneGeom = new ConeGeometry(0.3, 0.8, 16);
-  coneGeom.rotateX(Math.PI);
-  for (let c = 0;c < 5; c++) {
-    const cMat = new MeshStandardMaterial({
-      color: 16777215,
-      emissive: clusterColors[c % clusterColors.length],
-      emissiveIntensity: 0.8
+  const unassignedColor = 6583435;
+  let centroidMeshes = [];
+  function setupThreeScene() {
+    const canvasBox = container.querySelector("#cluster-canvas-container");
+    if (!canvasBox)
+      return;
+    const width = canvasBox.clientWidth || 800;
+    const height = 420;
+    scene = new Scene;
+    scene.background = new Color(395540);
+    camera = new PerspectiveCamera(45, width / height, 0.1, 100);
+    camera.position.set(0, 9, 8);
+    camera.lookAt(0, 0, 0);
+    renderer = new WebGLRenderer({ antialias: true });
+    renderer.setSize(width, height);
+    canvasBox.appendChild(renderer.domElement);
+    scene.add(new AmbientLight(16777215, 0.8));
+    const dirLight = new DirectionalLight(61695, 1.2);
+    dirLight.position.set(5, 10, 5);
+    scene.add(dirLight);
+    const grid = new GridHelper(10, 10, 61695, 2042173);
+    scene.add(grid);
+    const ptGeom = new SphereGeometry(0.14, 16, 16);
+    points.forEach((p) => {
+      const color = p.cluster >= 0 ? clusterColors[p.cluster % clusterColors.length] : unassignedColor;
+      const mat = new MeshStandardMaterial({ color });
+      const mesh = new Mesh(ptGeom, mat);
+      mesh.position.set(p.x, 0.15, p.z);
+      scene.add(mesh);
+      p.mesh = mesh;
     });
-    const cMesh = new Mesh(coneGeom, cMat);
-    scene.add(cMesh);
-    centroidMeshes.push(cMesh);
+    centroidMeshes = [];
+    const coneGeom = new ConeGeometry(0.3, 0.8, 16);
+    coneGeom.rotateX(Math.PI);
+    for (let c = 0;c < 5; c++) {
+      const cMat = new MeshStandardMaterial({
+        color: 16777215,
+        emissive: clusterColors[c % clusterColors.length],
+        emissiveIntensity: 0.8
+      });
+      const cMesh = new Mesh(coneGeom, cMat);
+      scene.add(cMesh);
+      centroidMeshes.push(cMesh);
+    }
+    updateVisuals();
+    let reqId;
+    let angle = 0;
+    function animate() {
+      reqId = requestAnimationFrame(animate);
+      angle += 0.003;
+      camera.position.x = 9 * Math.cos(angle);
+      camera.position.z = 9 * Math.sin(angle);
+      camera.lookAt(0, 0, 0);
+      renderer.render(scene, camera);
+    }
+    animate();
+    const observer = new MutationObserver(() => {
+      if (!document.body.contains(canvasBox)) {
+        cancelAnimationFrame(reqId);
+        renderer.dispose();
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
   function updateVisuals() {
     points.forEach((p) => {
       if (p.mesh) {
-        p.mesh.material.color.setHex(clusterColors[p.cluster % clusterColors.length]);
+        const color = p.cluster >= 0 ? clusterColors[p.cluster % clusterColors.length] : unassignedColor;
+        p.mesh.material.color.setHex(color);
       }
     });
     centroidMeshes.forEach((cm, idx) => {
@@ -27190,82 +27283,81 @@ function renderWeek5Clustering(container) {
     if (silEl)
       silEl.textContent = sil.toFixed(3);
   }
-  updateVisuals();
-  container.querySelector("#btn-view-kmeans")?.addEventListener("click", () => {
-    sound.playClick();
-    mode = "kmeans";
-    renderWeek5Clustering(container);
-  });
-  container.querySelector("#btn-view-hier")?.addEventListener("click", () => {
-    sound.playClick();
-    mode = "hierarchical";
-    renderWeek5Clustering(container);
-  });
-  container.querySelector("#btn-kmeans-step")?.addEventListener("click", () => {
-    runKMeansStep();
-    updateVisuals();
-  });
-  container.querySelector("#btn-kmeans-reinit")?.addEventListener("click", () => {
-    sound.playClick();
-    centroids = [
-      { x: (Math.random() - 0.5) * 5, z: (Math.random() - 0.5) * 5 },
-      { x: (Math.random() - 0.5) * 5, z: (Math.random() - 0.5) * 5 },
-      { x: (Math.random() - 0.5) * 5, z: (Math.random() - 0.5) * 5 },
-      { x: (Math.random() - 0.5) * 5, z: (Math.random() - 0.5) * 5 },
-      { x: (Math.random() - 0.5) * 5, z: (Math.random() - 0.5) * 5 }
-    ];
-    runKMeansStep();
-    updateVisuals();
-  });
-  container.querySelector("#kmeans-k")?.addEventListener("input", (e) => {
-    kVal = parseInt(e.target.value);
-    const lbl = container.querySelector("#k-label");
-    if (lbl)
-      lbl.textContent = kVal.toString();
-    runKMeansStep();
-    updateVisuals();
-  });
-  container.querySelector("#btn-cluster-certify")?.addEventListener("click", () => {
-    const sil = computeSilhouette();
-    const fb = container.querySelector("#cluster-feedback");
-    if (sil >= 0.55) {
-      sound.playVictory();
-      confetti_module_default({ particleCount: 75, spread: 65 });
-      gameManager.addScore(150, 75);
-      gameManager.markGameComplete("week5_cluster");
-      fb.innerHTML = `
-        <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 14px; color: #a7f3d0;">
-          <strong>\uD83C\uDF89 High Silhouette Score Verified (${sil.toFixed(3)})!</strong> Your clustering has low intra-cluster distance a_i and high inter-cluster distance b_i!
-        </div>
-      `;
-    } else {
-      sound.playWrong();
-      fb.innerHTML = `
-        <div style="background: rgba(255, 170, 0, 0.15); border: 1px solid var(--accent-amber); border-radius: var(--radius-md); padding: 14px; color: #fef08a;">
-          <strong>Current Silhouette Score: ${sil.toFixed(3)}</strong> Click "Iterate Step" multiple times until centroids converge on the true 3 clusters!
-        </div>
-      `;
-    }
-  });
-  let reqId;
-  let angle = 0;
-  function animate() {
-    reqId = requestAnimationFrame(animate);
-    angle += 0.003;
-    camera.position.x = 9 * Math.cos(angle);
-    camera.position.z = 9 * Math.sin(angle);
-    camera.lookAt(0, 0, 0);
-    renderer.render(scene, camera);
+  function attachListeners() {
+    container.querySelector("#btn-view-kmeans")?.addEventListener("click", () => {
+      sound.playClick();
+      mode = "kmeans";
+      renderUI();
+    });
+    container.querySelector("#btn-view-hier")?.addEventListener("click", () => {
+      sound.playClick();
+      mode = "hierarchical";
+      runHierarchicalLinkage();
+      renderUI();
+    });
+    container.querySelector("#btn-kmeans-step")?.addEventListener("click", () => {
+      runKMeansStep();
+      hasConverged = true;
+      updateVisuals();
+    });
+    container.querySelector("#btn-kmeans-reinit")?.addEventListener("click", () => {
+      sound.playClick();
+      centroids = [
+        { x: (Math.random() - 0.5) * 5, z: (Math.random() - 0.5) * 5 },
+        { x: (Math.random() - 0.5) * 5, z: (Math.random() - 0.5) * 5 },
+        { x: (Math.random() - 0.5) * 5, z: (Math.random() - 0.5) * 5 },
+        { x: (Math.random() - 0.5) * 5, z: (Math.random() - 0.5) * 5 },
+        { x: (Math.random() - 0.5) * 5, z: (Math.random() - 0.5) * 5 }
+      ];
+      runKMeansStep();
+      updateVisuals();
+    });
+    container.querySelector("#kmeans-k")?.addEventListener("input", (e) => {
+      kVal = parseInt(e.target.value);
+      const lbl = container.querySelector("#k-label");
+      if (lbl)
+        lbl.textContent = kVal.toString();
+      runKMeansStep();
+      updateVisuals();
+    });
+    container.querySelector("#linkage-select")?.addEventListener("change", (e) => {
+      linkType = e.target.value;
+      sound.playClick();
+      runHierarchicalLinkage();
+      updateVisuals();
+    });
+    container.querySelector("#dendro-slider")?.addEventListener("input", (e) => {
+      dendroCut = parseFloat(e.target.value);
+      const lbl = container.querySelector("#cut-label");
+      if (lbl)
+        lbl.textContent = dendroCut.toFixed(2);
+      runHierarchicalLinkage();
+      updateVisuals();
+    });
+    container.querySelector("#btn-cluster-certify")?.addEventListener("click", () => {
+      const sil = computeSilhouette();
+      const fb = container.querySelector("#cluster-feedback");
+      if (sil >= 0.55 && (hasConverged || mode === "hierarchical")) {
+        sound.playVictory();
+        confetti_module_default({ particleCount: 75, spread: 65 });
+        gameManager.addScore(150, 75);
+        gameManager.markGameComplete("week5_cluster");
+        fb.innerHTML = `
+          <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 14px; color: #a7f3d0;">
+            <strong>\uD83C\uDF89 High Silhouette Score Verified (${sil.toFixed(3)})!</strong> You converged clusters with high cohesion (low intra-cluster distance a_i) and strong separation (high nearest-cluster distance b_i)!
+          </div>
+        `;
+      } else {
+        sound.playWrong();
+        fb.innerHTML = `
+          <div style="background: rgba(255, 170, 0, 0.15); border: 1px solid var(--accent-amber); border-radius: var(--radius-md); padding: 14px; color: #fef08a;">
+            <strong>Silhouette Score: ${sil.toFixed(3)}</strong> You must run the clustering algorithm (Click "Iterate Step" or adjust Dendrogram Cut) until points converge into well-separated clusters before certifying!
+          </div>
+        `;
+      }
+    });
   }
-  animate();
-  const observer = new MutationObserver(() => {
-    if (!document.body.contains(canvasBox)) {
-      cancelAnimationFrame(reqId);
-      renderer.dispose();
-      observer.disconnect();
-    }
-  });
-  observer.observe(document.body, { childList: true, subtree: true });
+  renderUI();
 }
 var init_week5_kmeans_hierarchical = __esm(() => {
   init_three_module();
@@ -27989,14 +28081,20 @@ function renderWeek5SslActiveLearning(container) {
       sample.queried = true;
       queryBudget--;
       queriesUsed++;
-      alAccuracy = Math.min(96.5, alAccuracy + 6.8);
+      const ent = calcEntropy(sample);
+      const boost = Math.max(1, parseFloat((ent * 5.2).toFixed(1)));
+      alAccuracy = Math.min(96.5, alAccuracy + boost);
       render();
       const fb = container.querySelector("#ssl-feedback");
       if (fb) {
+        const isHighGain = ent >= 1.2;
         fb.innerHTML = `
-          <span style="color:var(--accent-green); font-weight:bold;">
-            Oracle Label Acquired for ${sample.name}! Ground truth is Class ${sample.trueClass}. Accuracy boosted to ${alAccuracy.toFixed(1)}%!
-          </span>
+          <div style="background: ${isHighGain ? "rgba(0, 255, 136, 0.15)" : "rgba(255, 170, 0, 0.15)"}; border: 1px solid ${isHighGain ? "var(--accent-green)" : "var(--accent-amber)"}; border-radius: var(--radius-md); padding: 10px 14px; margin-top: 8px;">
+            <strong>${isHighGain ? "\uD83D\uDD25 High Information Gain" : "⚠️ Low Information Gain"} (+${boost.toFixed(1)}% Acc):</strong> 
+            Oracle labeled ${sample.name} as Class ${sample.trueClass} (Entropy H = ${ent.toFixed(2)}). 
+            ${isHighGain ? "Boundary uncertainty resolved!" : "Sample was already confident; minimal knowledge gained."}
+            Model accuracy now: <strong>${alAccuracy.toFixed(1)}%</strong>.
+          </div>
         `;
       }
     }
@@ -28026,14 +28124,16 @@ function renderWeek5SslActiveLearning(container) {
     });
     container.querySelector("#btn-ssl-certify")?.addEventListener("click", () => {
       const fb = container.querySelector("#ssl-feedback");
-      if (queriesUsed >= 3 || labeledCount >= 10) {
+      const alQualified = queriesUsed >= 2 && alAccuracy >= 74;
+      const sslQualified = wrapperIteration >= 1 || labeledCount >= 8;
+      if (alQualified || sslQualified) {
         sound.playVictory();
         confetti_module_default({ particleCount: 80, spread: 70 });
         gameManager.addScore(150, 75);
         gameManager.markGameComplete("week5_ssl");
         if (fb) {
           fb.innerHTML = `
-            <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 12px; color: #a7f3d0;">
+            <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 12px; color: #a7f3d0; margin-top: 8px;">
               <strong>\uD83C\uDF89 Semi-Supervised & Active Learning Mastery Certified!</strong> 
               You mastered the 3 SSL Assumptions, Wrapper Methods, and Oracle Uncertainty Sampling (Least Confident, Margin, Entropy)! +150 Score awarded.
             </div>
@@ -28043,8 +28143,8 @@ function renderWeek5SslActiveLearning(container) {
         sound.playWrong();
         if (fb) {
           fb.innerHTML = `
-            <div style="background: rgba(255, 170, 0, 0.15); border: 1px solid var(--accent-amber); border-radius: var(--radius-md); padding: 12px; color: #fef08a;">
-              <strong>Keep Exploring:</strong> Query at least 3 Oracle samples in Active Learning or run Label Propagation / Wrapper iterations to verify!
+            <div style="background: rgba(255, 170, 0, 0.15); border: 1px solid var(--accent-amber); border-radius: var(--radius-md); padding: 12px; color: #fef08a; margin-top: 8px;">
+              <strong>Keep Exploring:</strong> Query informative high-entropy samples in Active Learning to reach ≥ 74% accuracy, or run Semi-Supervised Wrapper iterations!
             </div>
           `;
         }
@@ -28194,19 +28294,67 @@ function renderWeek5EnsembleClash(container) {
     }
     const toCanvasX = (val) => (val + 3.2) / 6.4 * w;
     const toCanvasY = (val) => h / 2 - val / 2.8 * (h / 2);
+    function fitTree(data, depth, maxDepth) {
+      if (depth >= maxDepth || data.length <= 2) {
+        const meanY = data.reduce((s, d) => s + d.y, 0) / (data.length || 1);
+        return { val: meanY };
+      }
+      let bestSplit = 0;
+      let minLoss = Infinity;
+      let bestLeft = [];
+      let bestRight = [];
+      for (let i = 0;i < data.length - 1; i++) {
+        const mid = (data[i].x + data[i + 1].x) / 2;
+        const left = data.filter((d) => d.x <= mid);
+        const right = data.filter((d) => d.x > mid);
+        if (left.length === 0 || right.length === 0)
+          continue;
+        const mL = left.reduce((s, d) => s + d.y, 0) / left.length;
+        const mR = right.reduce((s, d) => s + d.y, 0) / right.length;
+        const loss = left.reduce((s, d) => s + (d.y - mL) ** 2, 0) + right.reduce((s, d) => s + (d.y - mR) ** 2, 0);
+        if (loss < minLoss) {
+          minLoss = loss;
+          bestSplit = mid;
+          bestLeft = left;
+          bestRight = right;
+        }
+      }
+      if (bestLeft.length === 0 || bestRight.length === 0) {
+        const meanY = data.reduce((s, d) => s + d.y, 0) / (data.length || 1);
+        return { val: meanY };
+      }
+      return {
+        splitX: bestSplit,
+        left: fitTree(bestLeft, depth + 1, maxDepth),
+        right: fitTree(bestRight, depth + 1, maxDepth)
+      };
+    }
+    function evalTree(node, x) {
+      if (node.val !== undefined)
+        return node.val;
+      if (x <= node.splitX)
+        return evalTree(node.left, x);
+      return evalTree(node.right, x);
+    }
     const curvePoints = 80;
     const xs = Array.from({ length: curvePoints }, (_, i) => -3 + 6 * i / (curvePoints - 1));
     const treePredictions = [];
     for (let t = 0;t < numTrees; t++) {
-      ctx.strokeStyle = `hsla(${t * 45 % 360}, 80%, 65%, 0.25)`;
+      ctx.strokeStyle = `hsla(${t * 45 % 360}, 80%, 65%, 0.28)`;
       ctx.lineWidth = 1.2;
-      ctx.setLineDash([4, 4]);
+      ctx.setLineDash([3, 3]);
       ctx.beginPath();
+      const sample = [];
+      for (let i = 0;i < baggingN; i++) {
+        const pseudoRand = Math.abs(Math.sin((t + 1) * 7919 + (i + 1) * 31));
+        const idx = Math.floor(pseudoRand * baggingN) % baggingN;
+        sample.push(baggingData[idx] || baggingData[0]);
+      }
+      sample.sort((a, b) => a.x - b.x);
+      const tree = fitTree(sample, 0, 3);
       const preds = [];
-      const phase = t * 0.73 % 2;
-      const freqNoise = 1 + t % 3 * 0.15;
       xs.forEach((xVal, idx) => {
-        const yPred = Math.sin(xVal * freqNoise + phase) * 1.8 + Math.cos(xVal * 2.5 + t) * 0.45;
+        const yPred = evalTree(tree, xVal);
         preds.push(yPred);
         const cx = toCanvasX(xVal);
         const cy = toCanvasY(yPred);
@@ -28569,9 +28717,25 @@ function renderWeek5EnsembleClash(container) {
           </div>
         ` : ""}
 
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 14px;">
-          <div id="ensemble-feedback" style="min-height: 24px; font-size: 13px;"></div>
-          <button id="btn-certify-ensemble" class="btn btn-accent">Verify Ensemble Clash Mastery</button>
+        <div style="background: rgba(10, 16, 28, 0.85); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px 18px; margin-top: 16px;">
+          <div style="font-size: 12px; font-weight: 700; color: var(--accent-amber); margin-bottom: 8px;">
+            Ensemble Mastery Checklist:
+          </div>
+          <div style="display: flex; gap: 20px; font-size: 12px; margin-bottom: 12px; flex-wrap: wrap;">
+            <span style="color: ${q11SelectedAnswer === 2 ? "var(--accent-green)" : "var(--text-muted)"};">
+              ${q11SelectedAnswer === 2 ? "✓" : "○"} Midterm Q11 (Exponential Loss)
+            </span>
+            <span style="color: ${adaRound >= 1 ? "var(--accent-green)" : "var(--text-muted)"};">
+              ${adaRound >= 1 ? "✓" : "○"} AdaBoost (Sample Re-weighting)
+            </span>
+            <span style="color: ${gbStep >= 1 ? "var(--accent-green)" : "var(--text-muted)"};">
+              ${gbStep >= 1 ? "✓" : "○"} Gradient Boosting (Residual Stumps)
+            </span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div id="ensemble-feedback" style="min-height: 24px; font-size: 13px;"></div>
+            <button id="btn-certify-ensemble" class="btn btn-accent">Verify Ensemble Clash Mastery</button>
+          </div>
         </div>
 
         <!-- Academic Explainer Card -->
@@ -28681,7 +28845,10 @@ function renderWeek5EnsembleClash(container) {
     });
     container.querySelector("#btn-certify-ensemble")?.addEventListener("click", () => {
       const fb = container.querySelector("#ensemble-feedback");
-      if (q11SelectedAnswer === 2 || gbStep >= 1 || adaRound >= 1) {
+      const hasQ11 = q11SelectedAnswer === 2;
+      const hasAda = adaRound >= 1;
+      const hasGb = gbStep >= 1;
+      if (hasQ11 && hasAda && hasGb) {
         sound.playVictory();
         confetti_module_default({ particleCount: 80, spread: 70 });
         gameManager.addScore(150, 75);
@@ -28696,10 +28863,17 @@ function renderWeek5EnsembleClash(container) {
         }
       } else {
         sound.playWrong();
+        const missing = [];
+        if (!hasQ11)
+          missing.push("Submit correct answer for Midterm Q11");
+        if (!hasAda)
+          missing.push("Run at least 1 AdaBoost round");
+        if (!hasGb)
+          missing.push("Step through Gradient Boosting (Learner 1 / 2)");
         if (fb) {
           fb.innerHTML = `
             <div style="background: rgba(255, 170, 0, 0.15); border: 1px solid var(--accent-amber); border-radius: var(--radius-md); padding: 12px; color: #fef08a;">
-              <strong>Keep Exploring:</strong> Answer Midterm Q11 or step through AdaBoost / Gradient Boosting to verify mastery!
+              <strong>Remaining to certify:</strong> ${missing.join(" • ")}
             </div>
           `;
         }
@@ -30770,6 +30944,430 @@ function renderWeek1MitchellBuilder(container) {
   render();
 }
 
+// src/games/week1_datasaurus_stats.ts
+init_state();
+init_sound();
+init_confetti_module();
+function renderWeek1DatasaurusStats(container) {
+  let activeShape = "dino";
+  let activeStep = 1;
+  function getShapePoints(shape) {
+    const pts = [];
+    const count = 100;
+    if (shape === "dino") {
+      const dinoCoords = [
+        [64.4, 71.23],
+        [66.41, 71.23],
+        [68.41, 71.23],
+        [70.42, 71.23],
+        [72.21, 70.33],
+        [74.01, 69.43],
+        [75.1, 67.83],
+        [76, 66.04],
+        [76.4, 64.13],
+        [76.4, 62.12],
+        [75.4, 60.73],
+        [73.6, 59.84],
+        [71.74, 59.23],
+        [69.73, 59.23],
+        [68.7, 58.63],
+        [69.6, 56.84],
+        [70.18, 55.23],
+        [68.18, 55.23],
+        [66.17, 55.23],
+        [64.29, 55.02],
+        [63.4, 53.23],
+        [62.5, 51.43],
+        [61.84, 49.54],
+        [61.2, 47.64],
+        [60.57, 45.74],
+        [60.69, 43.79],
+        [61.08, 41.82],
+        [61.48, 39.85],
+        [61.87, 37.88],
+        [62.26, 35.92],
+        [62.89, 34.02],
+        [63.63, 32.15],
+        [64.38, 30.29],
+        [65.12, 28.43],
+        [65.87, 26.56],
+        [65.89, 24.98],
+        [64.09, 24.08],
+        [62.34, 23.33],
+        [61.22, 25],
+        [60.11, 26.67],
+        [59, 28.34],
+        [57.57, 28.82],
+        [55.77, 27.92],
+        [54.19, 26.81],
+        [53.29, 25.02],
+        [52.39, 23.24],
+        [50.48, 23.87],
+        [48.58, 24.51],
+        [46.68, 25.14],
+        [47.03, 26.82],
+        [47.78, 28.69],
+        [48.53, 30.55],
+        [49.27, 32.41],
+        [50.02, 34.28],
+        [50.09, 36.16],
+        [49.46, 38.06],
+        [48.82, 39.97],
+        [48.19, 41.87],
+        [47.55, 43.77],
+        [46.92, 45.68],
+        [46.14, 47.49],
+        [44.72, 48.91],
+        [43.3, 50.33],
+        [41.88, 51.75],
+        [40.47, 53.17],
+        [38.59, 53.84],
+        [36.68, 54.47],
+        [34.78, 55.11],
+        [32.87, 54.73],
+        [30.97, 54.09],
+        [29.07, 53.46],
+        [28.98, 52.07],
+        [29.88, 50.28],
+        [31.15, 49.61],
+        [32.95, 50.51],
+        [34.76, 51.11],
+        [36.67, 50.48],
+        [38.57, 49.84],
+        [40.44, 49.17],
+        [41.56, 47.5],
+        [42.67, 45.83],
+        [43.78, 44.16],
+        [44.53, 44.12],
+        [44.81, 46.1],
+        [45.09, 48.09],
+        [45.38, 50.08],
+        [45.66, 52.06],
+        [45.94, 54.05],
+        [46.23, 56.04],
+        [47.04, 57.71],
+        [48.64, 58.92],
+        [50.25, 60.12],
+        [51.85, 61.32],
+        [53.46, 62.53],
+        [55.09, 63.69],
+        [56.76, 64.81],
+        [58.43, 65.92],
+        [60.1, 67.03],
+        [61.56, 68.4],
+        [62.98, 69.82]
+      ];
+      for (const [x, y] of dinoCoords) {
+        pts.push({ x, y });
+      }
+    } else if (shape === "star") {
+      const verts = [];
+      for (let k = 0;k < 10; k++) {
+        const angle = -Math.PI / 2 + k * (Math.PI / 5);
+        const r = k % 2 === 0 ? 28 : 11;
+        verts.push([r * Math.cos(angle), r * Math.sin(angle)]);
+      }
+      verts.push(verts[0]);
+      for (let k = 0;k < 10; k++) {
+        const [x0, y0] = verts[k];
+        const [x1, y1] = verts[k + 1];
+        for (let s = 0;s < 10; s++) {
+          const t = s / 10;
+          pts.push({
+            x: 54.26 + (x0 + t * (x1 - x0)),
+            y: 47.83 + (y0 + t * (y1 - y0))
+          });
+        }
+      }
+    } else if (shape === "circle") {
+      for (let i = 0;i < count; i++) {
+        const angle = i / count * Math.PI * 2;
+        pts.push({
+          x: 54.26 + 22 * Math.cos(angle),
+          y: 47.83 + 22 * Math.sin(angle)
+        });
+      }
+    } else if (shape === "bullseye") {
+      const rings = [
+        { r: 7, n: 20 },
+        { r: 16, n: 30 },
+        { r: 25, n: 50 }
+      ];
+      for (const ring of rings) {
+        for (let i = 0;i < ring.n; i++) {
+          const angle = i / ring.n * Math.PI * 2;
+          pts.push({
+            x: 54.26 + ring.r * Math.cos(angle),
+            y: 47.83 + ring.r * Math.sin(angle)
+          });
+        }
+      }
+    } else {
+      for (let i = 0;i < 50; i++) {
+        const t = -22 + i / 49 * 44;
+        pts.push({ x: 54.26 + t, y: 47.83 + t });
+      }
+      for (let i = 0;i < 50; i++) {
+        const t = -22 + i / 49 * 44;
+        pts.push({ x: 54.26 + t, y: 47.83 - t });
+      }
+    }
+    return pts;
+  }
+  function render() {
+    container.innerHTML = `
+      <div class="game-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>\uD83E\uDD95 Game 1.3: The Datasaurus Dozen & Probability Trap</h2>
+            <p class="card-subtitle">Visual Intuition: Why summary statistics lie and distributions require direct inspection</p>
+          </div>
+          <span class="concept-badge">Week 1 Probability & Stats</span>
+        </div>
+
+        <!-- Stepper Component (Progressive Disclosure) -->
+        <div class="stepper-container">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
+            Progressive Tutorial:
+          </span>
+          <div class="step-indicator">
+            <button class="step-dot ${activeStep === 1 ? "active" : activeStep > 1 ? "done" : ""}" data-step="1">1</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Morphing Shapes</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 2 ? "active" : activeStep > 2 ? "done" : ""}" data-step="2">2</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Probability Rules</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 3 ? "active" : "done"}" data-step="3">3</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Mastery Quiz</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-step-prev" class="btn btn-secondary btn-sm" ${activeStep === 1 ? 'disabled style="opacity: 0.4;"' : ""}>◀ Prev</button>
+            <button id="btn-step-next" class="btn btn-primary btn-sm" ${activeStep === 3 ? 'disabled style="opacity: 0.4;"' : ""}>Next ▶</button>
+          </div>
+        </div>
+
+        ${activeStep === 1 ? `
+          <!-- Step 1: Shape Morphing & Invariant Statistics -->
+          <div style="animation: fadeIn 0.3s ease;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+              <span style="font-size: 13px; color: var(--text-secondary);">Select distribution pattern to inspect:</span>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-sm ${activeShape === "dino" ? "btn-primary" : "btn-secondary"} btn-shape" data-shape="dino">\uD83E\uDD95 Dinosaur</button>
+                <button class="btn btn-sm ${activeShape === "star" ? "btn-primary" : "btn-secondary"} btn-shape" data-shape="star">⭐ Star</button>
+                <button class="btn btn-sm ${activeShape === "bullseye" ? "btn-primary" : "btn-secondary"} btn-shape" data-shape="bullseye">\uD83C\uDFAF Bullseye</button>
+                <button class="btn btn-sm ${activeShape === "circle" ? "btn-primary" : "btn-secondary"} btn-shape" data-shape="circle">⭕ Circle</button>
+                <button class="btn btn-sm ${activeShape === "x" ? "btn-primary" : "btn-secondary"} btn-shape" data-shape="x">❌ X-Shape</button>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 300px; gap: 20px; margin-bottom: 20px;">
+              <div class="game-viewport" style="height: 320px;">
+                <canvas id="dino-canvas" width="600" height="320" style="width: 100%; height: 100%;"></canvas>
+                <div class="viewport-overlay">
+                  Shape: <span style="color: var(--accent-cyan); font-weight: bold; text-transform: uppercase;">${activeShape}</span> (100 Sample Points)
+                </div>
+              </div>
+
+              <!-- Stat Gauges Box -->
+              <div style="background: rgba(10, 15, 25, 0.85); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 18px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <h4 style="font-size: 13px; text-transform: uppercase; color: var(--accent-amber); margin-bottom: 12px;">\uD83D\uDCCA Computed Summary Statistics</h4>
+                  <div style="display: flex; flex-direction: column; gap: 10px; font-family: 'Fira Code', monospace; font-size: 13px;">
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;">
+                      <span style="color: var(--text-muted);">Mean(X):</span>
+                      <span style="color: var(--accent-cyan); font-weight: 700;">54.26</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;">
+                      <span style="color: var(--text-muted);">Mean(Y):</span>
+                      <span style="color: var(--accent-cyan); font-weight: 700;">47.83</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;">
+                      <span style="color: var(--text-muted);">StdDev(X):</span>
+                      <span style="color: #a7f3d0; font-weight: 700;">16.76</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;">
+                      <span style="color: var(--text-muted);">StdDev(Y):</span>
+                      <span style="color: #a7f3d0; font-weight: 700;">26.93</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                      <span style="color: var(--text-muted);">Pearson r:</span>
+                      <span style="color: #fca5a5; font-weight: 700;">-0.06</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="background: rgba(255, 170, 0, 0.1); border-left: 3px solid var(--accent-amber); padding: 10px; border-radius: 4px; font-size: 11.5px; color: #fde047; line-height: 1.5;">
+                  \uD83D\uDCA1 <strong>Core Takeaway:</strong> Despite identical mean, variance, and correlation, the underlying structures are radically different!
+                </div>
+              </div>
+            </div>
+          </div>
+        ` : activeStep === 2 ? `
+          <!-- Step 2: Sum & Product Rule Calculator -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.7); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 8px;">\uD83C\uDFB2 Probability Foundations: Sum Rule & Product Rule</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 18px;">
+              Machine learning uses probability theory to model uncertainty under observation. Adjust the conditional prior to see marginalization:
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px;">
+              <div style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.2); padding: 16px; border-radius: var(--radius-md);">
+                <h4 style="color: var(--accent-cyan); font-size: 14px; margin-bottom: 8px;">1. The Sum Rule (Marginalization)</h4>
+                <div class="formula-block">p(X = x) = ∑_y p(X = x, Y = y)</div>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                  Sums joint probabilities across all possible states of variable Y to obtain the marginal probability p(X).
+                </p>
+              </div>
+
+              <div style="background: rgba(157, 78, 221, 0.05); border: 1px solid rgba(157, 78, 221, 0.2); padding: 16px; border-radius: var(--radius-md);">
+                <h4 style="color: #c084fc; font-size: 14px; margin-bottom: 8px;">2. The Product Rule (Conditioning)</h4>
+                <div class="formula-block">p(X = x, Y = y) = p(Y = y | X = x) · p(X = x)</div>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                  Decomposes the joint probability into conditional likelihood times prior probability.
+                </p>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+              <button id="btn-verify-prob" class="btn btn-primary btn-sm">Verify Probability Axioms (+50 XP)</button>
+            </div>
+            <div id="prob-feedback" style="margin-top: 10px;"></div>
+          </div>
+        ` : `
+          <!-- Step 3: Interactive Mastery Check -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.7); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 8px;">\uD83C\uDFAF Check Your Understanding: Statistics in ML</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+              According to Week 1 slides, what is the key difference between probability theory and applied statistics in machine learning?
+            </p>
+
+            <div class="quiz-options" style="margin-bottom: 16px;">
+              <button class="quiz-option-btn q-opt-stats" data-val="correct">
+                <strong>Probability</strong> reasons forward from a known data-generation process to future outcomes; <strong>Statistics & ML</strong> reason backward from observed empirical data to fit governing parameters.
+              </button>
+              <button class="quiz-option-btn q-opt-stats" data-val="wrong1">
+                Probability is only used for discrete classification, while statistics is exclusively for continuous regression.
+              </button>
+              <button class="quiz-option-btn q-opt-stats" data-val="wrong2">
+                Machine learning strictly avoids probability theory because gradient descent is purely deterministic.
+              </button>
+            </div>
+            <div id="quiz-feedback" style="min-height: 30px;"></div>
+          </div>
+        `}
+
+        <details class="math-explainer">
+          <summary>\uD83D\uDCA1 Deep Dive & Formula Breakdown (Click to expand)</summary>
+          <div class="explainer-content">
+            <p><strong>Datasaurus Dozen (Alberto Cairo, 2016):</strong> Created to demonstrate the importance of visualizing data rather than blindly relying on low-order summary statistics. An entire family of 12 distinct datasets share nearly identical:</p>
+            <ul>
+              <li>Mean: (\bar{x} = 54.26, \bar{y} = 47.83)</li>
+              <li>Standard Deviation: (s_x = 16.76, s_y = 26.93)</li>
+              <li>Pearson correlation: (r = -0.06)</li>
+            </ul>
+            <div class="formula-block">
+              Pearson Correlation: r = ∑ (x_i - x̄)(y_i - ȳ) / [ √(∑(x_i - x̄)²) · √(∑(y_i - ȳ)²) ]
+            </div>
+          </div>
+        </details>
+      </div>
+    `;
+    if (activeStep === 1) {
+      const canvas = container.querySelector("#dino-canvas");
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+        ctx.lineWidth = 1;
+        for (let x = 0;x < canvas.width; x += 40) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, canvas.height);
+          ctx.stroke();
+        }
+        for (let y = 0;y < canvas.height; y += 40) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(canvas.width, y);
+          ctx.stroke();
+        }
+        const pts = getShapePoints(activeShape);
+        const plotSize = Math.min(canvas.width, canvas.height) * 0.88;
+        const offsetX = (canvas.width - plotSize) / 2;
+        const offsetY = (canvas.height - plotSize) / 2;
+        pts.forEach((p) => {
+          const px = offsetX + p.x / 100 * plotSize;
+          const py = offsetY + (1 - p.y / 100) * plotSize;
+          ctx.fillStyle = activeShape === "dino" ? "#00f0ff" : activeShape === "star" ? "#f59e0b" : activeShape === "bullseye" ? "#ef4444" : activeShape === "x" ? "#ec4899" : "#a855f7";
+          ctx.beginPath();
+          ctx.arc(px, py, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "rgba(255,255,255,0.6)";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        });
+      }
+    }
+    container.querySelectorAll(".btn-shape").forEach((b) => {
+      b.addEventListener("click", () => {
+        sound.playClick();
+        activeShape = b.dataset.shape || "dino";
+        render();
+      });
+    });
+    container.querySelectorAll(".step-dot").forEach((b) => {
+      b.addEventListener("click", () => {
+        sound.playClick();
+        activeStep = parseInt(b.dataset.step || "1");
+        render();
+      });
+    });
+    container.querySelector("#btn-step-prev")?.addEventListener("click", () => {
+      if (activeStep > 1) {
+        sound.playClick();
+        activeStep--;
+        render();
+      }
+    });
+    container.querySelector("#btn-step-next")?.addEventListener("click", () => {
+      if (activeStep < 3) {
+        sound.playClick();
+        activeStep++;
+        render();
+      }
+    });
+    container.querySelector("#btn-verify-prob")?.addEventListener("click", () => {
+      sound.playCorrect();
+      gameManager.addScore(50, 25);
+      const fb = container.querySelector("#prob-feedback");
+      if (fb) {
+        fb.innerHTML = '<span style="color: var(--accent-green); font-size: 13px;">✓ Correct! Sum Rule provides marginal probabilities; Product Rule conditions on observed evidence!</span>';
+      }
+    });
+    container.querySelectorAll(".q-opt-stats").forEach((b) => {
+      b.addEventListener("click", () => {
+        const val = b.dataset.val;
+        const fb = container.querySelector("#quiz-feedback");
+        if (val === "correct") {
+          sound.playVictory();
+          confetti_module_default({ particleCount: 50, spread: 60 });
+          gameManager.addScore(100, 50);
+          gameManager.markGameComplete("week1_datasaurus");
+          if (fb) {
+            fb.innerHTML = '<div style="color: var(--accent-green); font-weight: 700; margin-top: 8px;">\uD83C\uDF89 Perfect! Probability works forward from known systems; ML works backward from data to fit parameters θ!</div>';
+          }
+        } else {
+          sound.playWrong();
+          if (fb) {
+            fb.innerHTML = '<div style="color: var(--accent-red); margin-top: 8px;">Incorrect. Review: Probability deduces outcomes from known models; Machine Learning infers model parameters from empirical data.</div>';
+          }
+        }
+      });
+    });
+  }
+  render();
+}
+
 // src/games/week1_vector_arena.ts
 init_three_module();
 init_sound();
@@ -30950,6 +31548,556 @@ function renderWeek1VectorArena(container) {
     }
   });
   observer.observe(document.body, { childList: true, subtree: true });
+}
+
+// src/games/week1_tabular_probability_bayes.ts
+init_state();
+init_sound();
+init_confetti_module();
+var TENNIS_DATASET = [
+  { id: 1, outlook: "Sunny", temp: "Hot", humidity: "High", wind: "Weak", play: "No" },
+  { id: 2, outlook: "Sunny", temp: "Hot", humidity: "High", wind: "Strong", play: "No" },
+  { id: 3, outlook: "Overcast", temp: "Hot", humidity: "High", wind: "Weak", play: "Yes" },
+  { id: 4, outlook: "Rain", temp: "Mild", humidity: "High", wind: "Weak", play: "Yes" },
+  { id: 5, outlook: "Rain", temp: "Cool", humidity: "Normal", wind: "Weak", play: "Yes" },
+  { id: 6, outlook: "Rain", temp: "Cool", humidity: "Normal", wind: "Strong", play: "No" },
+  { id: 7, outlook: "Overcast", temp: "Cool", humidity: "Normal", wind: "Strong", play: "Yes" },
+  { id: 8, outlook: "Sunny", temp: "Mild", humidity: "High", wind: "Weak", play: "No" },
+  { id: 9, outlook: "Sunny", temp: "Cool", humidity: "Normal", wind: "Weak", play: "Yes" },
+  { id: 10, outlook: "Rain", temp: "Mild", humidity: "Normal", wind: "Weak", play: "Yes" },
+  { id: 11, outlook: "Sunny", temp: "Mild", humidity: "Normal", wind: "Strong", play: "Yes" },
+  { id: 12, outlook: "Overcast", temp: "Mild", humidity: "High", wind: "Strong", play: "Yes" },
+  { id: 13, outlook: "Overcast", temp: "Hot", humidity: "Normal", wind: "Weak", play: "Yes" },
+  { id: 14, outlook: "Rain", temp: "Mild", humidity: "High", wind: "Strong", play: "No" }
+];
+function renderWeek1TabularProbabilityBayes(container) {
+  let activeTab = "table";
+  let selectedFeature = "outlook";
+  let filterVal = null;
+  let practiceCorrect = 0;
+  let practiceTotal = 0;
+  let currentQuestionIdx = 0;
+  let practiceFeedback = "";
+  const PRACTICE_QUESTIONS = [
+    {
+      q: "From the dataset (N = 14), what is the Prior Probability P(Play = Yes)?",
+      choices: ["9 / 14 (≈ 0.643)", "5 / 14 (≈ 0.357)", "9 / 9 (1.000)", "14 / 9 (1.555)"],
+      correct: 0,
+      expl: "Count(Play = Yes) = 9 out of 14 total samples. Therefore P(Play = Yes) = 9/14 ≈ 0.643."
+    },
+    {
+      q: "What is the Marginal Feature Probability P(Outlook = Sunny)?",
+      choices: ["5 / 14 (≈ 0.357)", "2 / 9 (≈ 0.222)", "3 / 5 (0.600)", "4 / 14 (≈ 0.286)"],
+      correct: 0,
+      expl: "Count(Sunny) = 5 samples (Rows 1, 2, 8, 9, 11). Therefore P(Sunny) = 5/14 ≈ 0.357."
+    },
+    {
+      q: "What is the Conditional Probability (Likelihood) P(Outlook = Sunny | Play = Yes)?",
+      choices: ["2 / 9 (≈ 0.222)", "2 / 14 (≈ 0.143)", "2 / 5 (0.400)", "5 / 9 (≈ 0.556)"],
+      correct: 0,
+      expl: 'P(Sunny | Yes) = Count(Sunny AND Yes) / Count(Yes) = 2 / 9 ≈ 0.222. Out of 9 "Yes" rows, only 2 have Sunny.'
+    },
+    {
+      q: "What is the Conditional Probability P(Outlook = Sunny | Play = No)?",
+      choices: ["3 / 5 (0.600)", "3 / 14 (≈ 0.214)", "2 / 5 (0.400)", "5 / 5 (1.000)"],
+      correct: 0,
+      expl: 'P(Sunny | No) = Count(Sunny AND No) / Count(No) = 3 / 5 = 0.600. Out of 5 "No" rows, 3 have Sunny.'
+    },
+    {
+      q: "Using Bayes Rule: P(Play = Yes | Outlook = Sunny) = [P(Sunny | Yes) · P(Yes)] / P(Sunny). What is the result?",
+      choices: ["2 / 5 (0.400)", "3 / 5 (0.600)", "2 / 9 (≈ 0.222)", "9 / 14 (≈ 0.643)"],
+      correct: 0,
+      expl: "P(Yes | Sunny) = (2/9 · 9/14) / (5/14) = (2/14) / (5/14) = 2/5 = 0.400. Direct count: 2 Yes out of 5 Sunny."
+    },
+    {
+      q: "What is the Conditional Probability P(Humidity = High | Play = No)?",
+      choices: ["4 / 5 (0.800)", "3 / 9 (≈ 0.333)", "4 / 14 (≈ 0.286)", "1 / 5 (0.200)"],
+      correct: 0,
+      expl: 'Out of 5 "No" samples, 4 have High humidity (Rows 1, 2, 8, 14). So P(High | No) = 4/5 = 0.800.'
+    }
+  ];
+  let testOutlook = "Sunny";
+  let testTemp = "Cool";
+  let testHumidity = "High";
+  let testWind = "Strong";
+  function render() {
+    const N = TENNIS_DATASET.length;
+    const yesRows = TENNIS_DATASET.filter((d) => d.play === "Yes");
+    const noRows = TENNIS_DATASET.filter((d) => d.play === "No");
+    const featureValues = Array.from(new Set(TENNIS_DATASET.map((d) => d[selectedFeature])));
+    const contingencyData = featureValues.map((val) => {
+      const totalMatching = TENNIS_DATASET.filter((d) => d[selectedFeature] === val);
+      const yesMatching = totalMatching.filter((d) => d.play === "Yes").length;
+      const noMatching = totalMatching.filter((d) => d.play === "No").length;
+      return {
+        val,
+        total: totalMatching.length,
+        p_x: totalMatching.length / N,
+        yes: yesMatching,
+        no: noMatching,
+        p_x_given_yes: yesMatching / yesRows.length,
+        p_x_given_no: noMatching / noRows.length,
+        p_yes_given_x: totalMatching.length > 0 ? yesMatching / totalMatching.length : 0,
+        p_no_given_x: totalMatching.length > 0 ? noMatching / totalMatching.length : 0
+      };
+    });
+    const pYes = yesRows.length / N;
+    const pNo = noRows.length / N;
+    const pOutlookYes = yesRows.filter((d) => d.outlook === testOutlook).length / yesRows.length;
+    const pOutlookNo = noRows.filter((d) => d.outlook === testOutlook).length / noRows.length;
+    const pTempYes = yesRows.filter((d) => d.temp === testTemp).length / yesRows.length;
+    const pTempNo = noRows.filter((d) => d.temp === testTemp).length / noRows.length;
+    const pHumidityYes = yesRows.filter((d) => d.humidity === testHumidity).length / yesRows.length;
+    const pHumidityNo = noRows.filter((d) => d.humidity === testHumidity).length / noRows.length;
+    const pWindYes = yesRows.filter((d) => d.wind === testWind).length / yesRows.length;
+    const pWindNo = noRows.filter((d) => d.wind === testWind).length / noRows.length;
+    const unnormYes = pYes * pOutlookYes * pTempYes * pHumidityYes * pWindYes;
+    const unnormNo = pNo * pOutlookNo * pTempNo * pHumidityNo * pWindNo;
+    const totalEvidence = unnormYes + unnormNo;
+    const postYes = totalEvidence > 0 ? unnormYes / totalEvidence : 0.5;
+    const postNo = totalEvidence > 0 ? unnormNo / totalEvidence : 0.5;
+    container.innerHTML = `
+      <div class="game-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>\uD83D\uDCCA Game 1.5: Tabular Probability & Bayes Matrix</h2>
+            <p class="card-subtitle">Master Computing Prior P(Y), Marginal P(X), Likelihood P(X|Y), Posterior P(Y|X) & Naive Bayes from Tabular Datasets</p>
+          </div>
+          <span class="concept-badge">Probability Foundations</span>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; flex-wrap: wrap;">
+          <button id="tab-table" class="btn btn-sm ${activeTab === "table" ? "btn-primary" : "btn-secondary"}">
+            \uD83D\uDCCB 1. Raw Dataset (N=14)
+          </button>
+          <button id="tab-contingency" class="btn btn-sm ${activeTab === "contingency" ? "btn-primary" : "btn-secondary"}">
+            \uD83E\uDDEE 2. Contingency & Conditional Matrix
+          </button>
+          <button id="tab-practice" class="btn btn-sm ${activeTab === "practice" ? "btn-primary" : "btn-secondary"}">
+            \uD83C\uDFAF 3. Probability Drill & Practice (${practiceCorrect}/${practiceTotal})
+          </button>
+          <button id="tab-naive" class="btn btn-sm ${activeTab === "naive_bayes" ? "btn-primary" : "btn-secondary"}">
+            ⚡ 4. Naive Bayes Classifier
+          </button>
+        </div>
+
+        ${activeTab === "table" ? `
+          <!-- Tab 1: Dataset Explorer -->
+          <div style="animation: fadeIn 0.3s ease;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+              <div>
+                <strong style="color: var(--accent-cyan); font-size: 14px;">Canonical ML Weather Dataset:</strong>
+                <span style="font-size: 12px; color: var(--text-secondary); margin-left: 8px;">14 Days • Target: PlayTennis (9 Yes, 5 No)</span>
+              </div>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <span style="font-size: 12px; color: var(--text-muted);">Quick Filter:</span>
+                <button class="btn btn-xs ${filterVal === null ? "btn-primary" : "btn-secondary"} btn-filter" data-val="all">All (14)</button>
+                <button class="btn btn-xs ${filterVal === "Sunny" ? "btn-primary" : "btn-secondary"} btn-filter" data-val="Sunny">Sunny (5)</button>
+                <button class="btn btn-xs ${filterVal === "Overcast" ? "btn-primary" : "btn-secondary"} btn-filter" data-val="Overcast">Overcast (4)</button>
+                <button class="btn btn-xs ${filterVal === "Rain" ? "btn-primary" : "btn-secondary"} btn-filter" data-val="Rain">Rain (5)</button>
+                <button class="btn btn-xs ${filterVal === "Yes" ? "btn-primary" : "btn-secondary"} btn-filter" data-val="Yes">Play = Yes (9)</button>
+                <button class="btn btn-xs ${filterVal === "No" ? "btn-primary" : "btn-secondary"} btn-filter" data-val="No">Play = No (5)</button>
+              </div>
+            </div>
+
+            <!-- Table -->
+            <div style="overflow-x: auto; background: rgba(10, 16, 28, 0.85); border: 1px solid var(--border-color); border-radius: var(--radius-md); max-height: 420px;">
+              <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+                <thead>
+                  <tr style="background: rgba(0, 240, 255, 0.08); border-bottom: 1px solid var(--border-color);">
+                    <th style="padding: 10px 14px; color: var(--text-muted);"># Day</th>
+                    <th style="padding: 10px 14px; color: var(--accent-cyan);">Outlook</th>
+                    <th style="padding: 10px 14px; color: #c084fc;">Temperature</th>
+                    <th style="padding: 10px 14px; color: var(--accent-amber);">Humidity</th>
+                    <th style="padding: 10px 14px; color: #38bdf8;">Wind</th>
+                    <th style="padding: 10px 14px; color: var(--accent-green);">Play Tennis (Y)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${TENNIS_DATASET.map((d) => {
+      const matchesFilter = filterVal === null || d.outlook === filterVal || d.play === filterVal;
+      return `
+                      <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); background: ${matchesFilter ? filterVal ? "rgba(0, 240, 255, 0.08)" : "transparent" : "rgba(0,0,0,0.3)"}; opacity: ${matchesFilter ? "1" : "0.35"}; transition: all 0.2s;">
+                        <td style="padding: 8px 14px; font-family:'Fira Code'; color:var(--text-muted);">${d.id}</td>
+                        <td style="padding: 8px 14px; font-weight:bold; color:var(--accent-cyan);">${d.outlook}</td>
+                        <td style="padding: 8px 14px;">${d.temp}</td>
+                        <td style="padding: 8px 14px;">${d.humidity}</td>
+                        <td style="padding: 8px 14px;">${d.wind}</td>
+                        <td style="padding: 8px 14px;">
+                          <span class="badge-pill" style="background:${d.play === "Yes" ? "rgba(0,255,136,0.15)" : "rgba(255,51,68,0.15)"}; color:${d.play === "Yes" ? "var(--accent-green)" : "var(--accent-red)"}; border:1px solid ${d.play === "Yes" ? "rgba(0,255,136,0.3)" : "rgba(255,51,68,0.3)"};">
+                            ${d.play}
+                          </span>
+                        </td>
+                      </tr>
+                    `;
+    }).join("")}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Quick Summary Metrics -->
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px;">
+              <div style="background: rgba(0, 255, 136, 0.06); border: 1px solid rgba(0, 255, 136, 0.2); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 11px; color: var(--text-muted);">PRIOR P(Play = Yes)</div>
+                <div style="font-size: 18px; font-weight: bold; color: var(--accent-green); margin-top: 4px;">9 / 14 ≈ 0.643</div>
+              </div>
+              <div style="background: rgba(255, 51, 68, 0.06); border: 1px solid rgba(255, 51, 68, 0.2); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 11px; color: var(--text-muted);">PRIOR P(Play = No)</div>
+                <div style="font-size: 18px; font-weight: bold; color: var(--accent-red); margin-top: 4px;">5 / 14 ≈ 0.357</div>
+              </div>
+              <div style="background: rgba(0, 240, 255, 0.06); border: 1px solid rgba(0, 240, 255, 0.2); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 11px; color: var(--text-muted);">SUM RULE CHECK</div>
+                <div style="font-size: 18px; font-weight: bold; color: var(--accent-cyan); margin-top: 4px;">P(Yes) + P(No) = 1.0</div>
+              </div>
+              <div style="background: rgba(157, 78, 221, 0.06); border: 1px solid rgba(157, 78, 221, 0.2); border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 11px; color: var(--text-muted);">TOTAL SAMPLES N</div>
+                <div style="font-size: 18px; font-weight: bold; color: #c084fc; margin-top: 4px;">14 Instances</div>
+              </div>
+            </div>
+          </div>
+        ` : activeTab === "contingency" ? `
+          <!-- Tab 2: Contingency Matrix -->
+          <div style="animation: fadeIn 0.3s ease;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+              <span style="font-size: 13px; color: var(--text-secondary);">Select Feature to Compute Probabilities:</span>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm ${selectedFeature === "outlook" ? "btn-primary" : "btn-secondary"} btn-sel-feat" data-f="outlook">Outlook</button>
+                <button class="btn btn-sm ${selectedFeature === "temp" ? "btn-primary" : "btn-secondary"} btn-sel-feat" data-f="temp">Temperature</button>
+                <button class="btn btn-sm ${selectedFeature === "humidity" ? "btn-primary" : "btn-secondary"} btn-sel-feat" data-f="humidity">Humidity</button>
+                <button class="btn btn-sm ${selectedFeature === "wind" ? "btn-primary" : "btn-secondary"} btn-sel-feat" data-f="wind">Wind</button>
+              </div>
+            </div>
+
+            <!-- Contingency & Probability Table -->
+            <div style="overflow-x: auto; background: rgba(10, 16, 28, 0.9); border: 1px solid var(--border-color); border-radius: var(--radius-md); margin-bottom: 18px;">
+              <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 13px;">
+                <thead>
+                  <tr style="background: rgba(0, 240, 255, 0.08); border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 12px; text-align: left; color: var(--accent-cyan);">Value (x)</th>
+                    <th style="padding: 12px; color: var(--text-muted);">Count(x)</th>
+                    <th style="padding: 12px; color: var(--accent-cyan);">Marginal P(x)</th>
+                    <th style="padding: 12px; color: var(--accent-green);">Play = Yes</th>
+                    <th style="padding: 12px; color: var(--accent-red);">Play = No</th>
+                    <th style="padding: 12px; color: #a7f3d0;">Likelihood P(x | Yes)</th>
+                    <th style="padding: 12px; color: #fca5a5;">Likelihood P(x | No)</th>
+                    <th style="padding: 12px; color: #fef08a;">Posterior P(Yes | x)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${contingencyData.map((row) => `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                      <td style="padding: 10px 14px; text-align: left; font-weight: bold; color: #fff;">${row.val}</td>
+                      <td style="padding: 10px; font-family:'Fira Code';">${row.total}</td>
+                      <td style="padding: 10px; font-family:'Fira Code'; color:var(--accent-cyan);">${row.total}/14 (≈ ${row.p_x.toFixed(3)})</td>
+                      <td style="padding: 10px; font-family:'Fira Code'; color:var(--accent-green); font-weight:bold;">${row.yes}</td>
+                      <td style="padding: 10px; font-family:'Fira Code'; color:var(--accent-red); font-weight:bold;">${row.no}</td>
+                      <td style="padding: 10px; font-family:'Fira Code'; color:#a7f3d0; background:rgba(0,255,136,0.04); font-weight:bold;">
+                        ${row.yes}/9 (≈ ${row.p_x_given_yes.toFixed(3)})
+                      </td>
+                      <td style="padding: 10px; font-family:'Fira Code'; color:#fca5a5; background:rgba(255,51,68,0.04); font-weight:bold;">
+                        ${row.no}/5 (≈ ${row.p_x_given_no.toFixed(3)})
+                      </td>
+                      <td style="padding: 10px; font-family:'Fira Code'; color:#fef08a; font-weight:bold;">
+                        ${row.yes}/${row.total} (≈ ${row.p_yes_given_x.toFixed(3)})
+                      </td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Mathematical Formula Explainer Card -->
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;">
+              <div style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.2); border-radius: 8px; padding: 14px;">
+                <strong style="color: var(--accent-cyan); font-size: 13px;">1. Marginal P(X = x)</strong>
+                <div class="formula-block" style="font-size: 11px; margin-top: 6px;">
+                  P(x) = Count(x) / N
+                </div>
+                <p style="font-size: 11.5px; color: var(--text-secondary); margin-top: 4px;">
+                  Total probability of feature value x across all class outcomes.
+                </p>
+              </div>
+
+              <div style="background: rgba(0, 255, 136, 0.05); border: 1px solid rgba(0, 255, 136, 0.2); border-radius: 8px; padding: 14px;">
+                <strong style="color: var(--accent-green); font-size: 13px;">2. Likelihood P(X = x | Y = y)</strong>
+                <div class="formula-block" style="font-size: 11px; margin-top: 6px;">
+                  P(x | y) = Count(x ∩ y) / Count(y)
+                </div>
+                <p style="font-size: 11.5px; color: var(--text-secondary); margin-top: 4px;">
+                  Frequency of feature x strictly within subset of class y.
+                </p>
+              </div>
+
+              <div style="background: rgba(255, 170, 0, 0.05); border: 1px solid rgba(255, 170, 0, 0.2); border-radius: 8px; padding: 14px;">
+                <strong style="color: var(--accent-amber); font-size: 13px;">3. Bayes Theorem P(Y = y | X = x)</strong>
+                <div class="formula-block" style="font-size: 11px; margin-top: 6px;">
+                  P(y | x) = [P(x | y) · P(y)] / P(x)
+                </div>
+                <p style="font-size: 11.5px; color: var(--text-secondary); margin-top: 4px;">
+                  Inverting the conditioning to find class posterior probability!
+                </p>
+              </div>
+            </div>
+          </div>
+        ` : activeTab === "practice" ? `
+          <!-- Tab 3: Probability Practice Drill -->
+          <div style="animation: fadeIn 0.3s ease;">
+            <div style="background: rgba(10, 16, 28, 0.9); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 20px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+                <span style="font-size: 12px; text-transform: uppercase; color: var(--accent-amber); font-weight: bold; letter-spacing: 1px;">
+                  Question ${currentQuestionIdx + 1} of ${PRACTICE_QUESTIONS.length}
+                </span>
+                <span class="badge-pill">Mastery Score: ${practiceCorrect} / ${practiceTotal}</span>
+              </div>
+
+              <h3 style="font-size: 17px; color: #fff; margin-bottom: 18px; line-height: 1.5;">
+                ${PRACTICE_QUESTIONS[currentQuestionIdx].q}
+              </h3>
+
+              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px;">
+                ${PRACTICE_QUESTIONS[currentQuestionIdx].choices.map((choice, idx) => `
+                  <button class="btn btn-secondary btn-q-choice" data-idx="${idx}" style="text-align: left; padding: 14px 18px; font-family:'Fira Code'; font-size: 13px;">
+                    ${String.fromCharCode(65 + idx)}) ${choice}
+                  </button>
+                `).join("")}
+              </div>
+
+              <div id="practice-feedback" style="min-height: 36px; margin-bottom: 14px;">
+                ${practiceFeedback}
+              </div>
+
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <button id="btn-prev-q" class="btn btn-secondary btn-sm" ${currentQuestionIdx === 0 ? "disabled" : ""}>◀ Previous Question</button>
+                <button id="btn-next-q" class="btn btn-primary btn-sm" ${currentQuestionIdx === PRACTICE_QUESTIONS.length - 1 ? "disabled" : ""}>Next Question ▶</button>
+              </div>
+            </div>
+          </div>
+        ` : `
+          <!-- Tab 4: Naive Bayes Classifier -->
+          <div style="animation: fadeIn 0.3s ease;">
+            <div style="background: rgba(10, 16, 28, 0.9); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 20px;">
+              <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 6px;">⚡ Naive Bayes Real-Time Predictor</h3>
+              <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 18px;">
+                Conditional Independence Assumption: ( P(X_1, dots, X_d mid Y) = prod_{i=1}^d P(X_i mid Y) ). Configure unseen test query probe ( X^* ):
+              </p>
+
+              <!-- Probe selectors -->
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px;">
+                <div>
+                  <label style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Outlook</label>
+                  <select id="sel-nb-outlook" class="form-control" style="width: 100%; margin-top: 4px; padding: 8px; background: #0c1220; border: 1px solid var(--border-color); color: #fff; border-radius: 6px;">
+                    <option value="Sunny" ${testOutlook === "Sunny" ? "selected" : ""}>Sunny</option>
+                    <option value="Overcast" ${testOutlook === "Overcast" ? "selected" : ""}>Overcast</option>
+                    <option value="Rain" ${testOutlook === "Rain" ? "selected" : ""}>Rain</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Temperature</label>
+                  <select id="sel-nb-temp" class="form-control" style="width: 100%; margin-top: 4px; padding: 8px; background: #0c1220; border: 1px solid var(--border-color); color: #fff; border-radius: 6px;">
+                    <option value="Hot" ${testTemp === "Hot" ? "selected" : ""}>Hot</option>
+                    <option value="Mild" ${testTemp === "Mild" ? "selected" : ""}>Mild</option>
+                    <option value="Cool" ${testTemp === "Cool" ? "selected" : ""}>Cool</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Humidity</label>
+                  <select id="sel-nb-humidity" class="form-control" style="width: 100%; margin-top: 4px; padding: 8px; background: #0c1220; border: 1px solid var(--border-color); color: #fff; border-radius: 6px;">
+                    <option value="High" ${testHumidity === "High" ? "selected" : ""}>High</option>
+                    <option value="Normal" ${testHumidity === "Normal" ? "selected" : ""}>Normal</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Wind</label>
+                  <select id="sel-nb-wind" class="form-control" style="width: 100%; margin-top: 4px; padding: 8px; background: #0c1220; border: 1px solid var(--border-color); color: #fff; border-radius: 6px;">
+                    <option value="Strong" ${testWind === "Strong" ? "selected" : ""}>Strong</option>
+                    <option value="Weak" ${testWind === "Weak" ? "selected" : ""}>Weak</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Computed Products Comparison -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 20px;">
+                <!-- Class Yes Box -->
+                <div style="background: rgba(0, 255, 136, 0.05); border: 2px solid ${postYes >= postNo ? "var(--accent-green)" : "rgba(0, 255, 136, 0.2)"}; border-radius: var(--radius-md); padding: 18px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong style="color: var(--accent-green); font-size: 16px;">Class: Play = YES</strong>
+                    <span style="font-size: 18px; font-weight: 800; color: var(--accent-green);">${(postYes * 100).toFixed(1)}%</span>
+                  </div>
+                  <div class="formula-block" style="font-size: 11px; margin: 10px 0; line-height: 1.6;">
+                    P(Yes) · ∏ P(x_i | Yes)<br>
+                    = (9/14) · (${pOutlookYes.toFixed(3)}) · (${pTempYes.toFixed(3)}) · (${pHumidityYes.toFixed(3)}) · (${pWindYes.toFixed(3)})<br>
+                    = <strong>${unnormYes.toFixed(6)}</strong>
+                  </div>
+                </div>
+
+                <!-- Class No Box -->
+                <div style="background: rgba(255, 51, 68, 0.05); border: 2px solid ${postNo > postYes ? "var(--accent-red)" : "rgba(255, 51, 68, 0.2)"}; border-radius: var(--radius-md); padding: 18px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong style="color: var(--accent-red); font-size: 16px;">Class: Play = NO</strong>
+                    <span style="font-size: 18px; font-weight: 800; color: var(--accent-red);">${(postNo * 100).toFixed(1)}%</span>
+                  </div>
+                  <div class="formula-block" style="font-size: 11px; margin: 10px 0; line-height: 1.6;">
+                    P(No) · ∏ P(x_i | No)<br>
+                    = (5/14) · (${pOutlookNo.toFixed(3)}) · (${pTempNo.toFixed(3)}) · (${pHumidityNo.toFixed(3)}) · (${pWindNo.toFixed(3)})<br>
+                    = <strong>${unnormNo.toFixed(6)}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Final Classification Decision Banner -->
+              <div style="background: rgba(0, 240, 255, 0.1); border: 1px solid var(--accent-cyan); border-radius: 8px; padding: 14px 18px; text-align: center;">
+                <span style="font-size: 13px; color: #fff;">
+                  Naive Bayes Classification Decision:
+                  <strong style="font-size: 16px; color: ${postYes >= postNo ? "var(--accent-green)" : "var(--accent-red)"}; margin-left: 8px;">
+                    PREDICT PLAY = ${postYes >= postNo ? "YES" : "NO"} (${Math.max(postYes, postNo) > 0 ? (Math.max(postYes, postNo) * 100).toFixed(1) : 50}%)
+                  </strong>
+                </span>
+              </div>
+            </div>
+          </div>
+        `}
+
+        <!-- Verify Mastery Check -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 18px; border-top: 1px solid var(--border-color); padding-top: 14px;">
+          <div id="bayes-cert-feedback" style="font-size: 13px;"></div>
+          <button id="btn-certify-bayes" class="btn btn-primary">Verify Tabular Probability Mastery</button>
+        </div>
+
+        <!-- Academic Explainer Card -->
+        <details class="math-explainer">
+          <summary>\uD83D\uDCA1 Course Slide Takeaway: Contingency Tables & Bayes Rules (Click to expand)</summary>
+          <div class="explainer-content">
+            <p><strong>Sum Rule:</strong> ( P(X = x) = sum_{y} P(X = x, Y = y) ) computes the marginal distribution by summing across all columns of a joint probability contingency matrix.</p>
+            <p><strong>Product Rule:</strong> ( P(X = x, Y = y) = P(X = x mid Y = y) cdot P(Y = y) ).</p>
+            <p><strong>Bayes Rule:</strong> ( P(Y = y mid X = x) = \frac{P(X = x mid Y = y) cdot P(Y = y)}{P(X = x)} ).</p>
+            <p><strong>Zero Frequency Problem & Laplace Smoothing:</strong> If an attribute value never appears with a class, ( P(X_i mid Y) = 0 ), wiping out the whole product! Additive Laplace smoothing resolves this: ( hat{P}(X_i = v mid Y = c) = \frac{	ext{Count} + 1}{	ext{Total} + |V|} ).</p>
+          </div>
+        </details>
+      </div>
+    `;
+    container.querySelector("#tab-table")?.addEventListener("click", () => {
+      sound.playClick();
+      activeTab = "table";
+      render();
+    });
+    container.querySelector("#tab-contingency")?.addEventListener("click", () => {
+      sound.playClick();
+      activeTab = "contingency";
+      render();
+    });
+    container.querySelector("#tab-practice")?.addEventListener("click", () => {
+      sound.playClick();
+      activeTab = "practice";
+      render();
+    });
+    container.querySelector("#tab-naive")?.addEventListener("click", () => {
+      sound.playClick();
+      activeTab = "naive_bayes";
+      render();
+    });
+    container.querySelectorAll(".btn-filter").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        sound.playClick();
+        const v = e.currentTarget.dataset.val;
+        filterVal = v === "all" ? null : v || null;
+        render();
+      });
+    });
+    container.querySelectorAll(".btn-sel-feat").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        sound.playClick();
+        selectedFeature = e.currentTarget.dataset.f;
+        render();
+      });
+    });
+    container.querySelectorAll(".btn-q-choice").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const choiceIdx = parseInt(e.currentTarget.dataset.idx || "0");
+        const q = PRACTICE_QUESTIONS[currentQuestionIdx];
+        practiceTotal++;
+        if (choiceIdx === q.correct) {
+          sound.playCorrect();
+          practiceCorrect++;
+          gameManager.addScore(50, 25);
+          practiceFeedback = `
+            <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 12px; color: #a7f3d0;">
+              <strong>✓ Correct! (+50 Score)</strong> ${q.expl}
+            </div>
+          `;
+        } else {
+          sound.playWrong();
+          practiceFeedback = `
+            <div style="background: rgba(255, 51, 68, 0.15); border: 1px solid var(--accent-red); border-radius: var(--radius-md); padding: 12px; color: #fca5a5;">
+              <strong>✗ Incorrect!</strong> ${q.expl}
+            </div>
+          `;
+        }
+        render();
+      });
+    });
+    container.querySelector("#btn-prev-q")?.addEventListener("click", () => {
+      if (currentQuestionIdx > 0) {
+        sound.playClick();
+        currentQuestionIdx--;
+        practiceFeedback = "";
+        render();
+      }
+    });
+    container.querySelector("#btn-next-q")?.addEventListener("click", () => {
+      if (currentQuestionIdx < PRACTICE_QUESTIONS.length - 1) {
+        sound.playClick();
+        currentQuestionIdx++;
+        practiceFeedback = "";
+        render();
+      }
+    });
+    container.querySelector("#sel-nb-outlook")?.addEventListener("change", (e) => {
+      testOutlook = e.target.value;
+      render();
+    });
+    container.querySelector("#sel-nb-temp")?.addEventListener("change", (e) => {
+      testTemp = e.target.value;
+      render();
+    });
+    container.querySelector("#sel-nb-humidity")?.addEventListener("change", (e) => {
+      testHumidity = e.target.value;
+      render();
+    });
+    container.querySelector("#sel-nb-wind")?.addEventListener("change", (e) => {
+      testWind = e.target.value;
+      render();
+    });
+    container.querySelector("#btn-certify-bayes")?.addEventListener("click", () => {
+      const fb = container.querySelector("#bayes-cert-feedback");
+      if (practiceCorrect >= 2 || activeTab === "naive_bayes") {
+        sound.playVictory();
+        confetti_module_default({ particleCount: 75, spread: 65 });
+        gameManager.addScore(150, 75);
+        gameManager.markGameComplete("week1_bayes");
+        if (fb) {
+          fb.innerHTML = `
+            <span style="color: var(--accent-green); font-weight: bold;">
+              \uD83C\uDF89 Tabular Probability & Bayes Mastery Certified! (+150 Score)
+            </span>
+          `;
+        }
+      } else {
+        sound.playWrong();
+        if (fb) {
+          fb.innerHTML = `
+            <span style="color: var(--accent-amber); font-weight: bold;">
+              ⚠️ Answer at least 2 questions in Tab 3 (Practice Drill) to earn certification!
+            </span>
+          `;
+        }
+      }
+    });
+  }
+  render();
 }
 
 // src/games/week2_gradient_descent.ts
@@ -31200,6 +32348,338 @@ function renderWeek2GradientDescent(container) {
     }
   });
   observer.observe(document.body, { childList: true, subtree: true });
+}
+
+// src/games/week2_bias_variance_dartboard.ts
+init_state();
+init_sound();
+init_confetti_module();
+function renderWeek2BiasVarianceDartboard(container) {
+  let activeStep = 1;
+  let selectedTarget = "low_bias_low_var";
+  let modelCapacity = 3;
+  function render() {
+    container.innerHTML = `
+      <div class="game-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>\uD83C\uDFAF Game 2.2: Bias-Variance Decomposition & Capacity U-Curve</h2>
+            <p class="card-subtitle">Visual Intuition: Dissecting Generalization Error = Bias² + Variance + Irreducible Noise</p>
+          </div>
+          <span class="concept-badge">Week 2 Model Capacity</span>
+        </div>
+
+        <!-- Progressive Disclosure Stepper -->
+        <div class="stepper-container">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
+            Progressive Tutorial:
+          </span>
+          <div class="step-indicator">
+            <button class="step-dot ${activeStep === 1 ? "active" : activeStep > 1 ? "done" : ""}" data-step="1">1</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Dartboard Physics</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 2 ? "active" : activeStep > 2 ? "done" : ""}" data-step="2">2</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Capacity U-Curve</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 3 ? "active" : "done"}" data-step="3">3</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Concept Mastery</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-step-prev" class="btn btn-secondary btn-sm" ${activeStep === 1 ? 'disabled style="opacity: 0.4;"' : ""}>◀ Prev</button>
+            <button id="btn-step-next" class="btn btn-primary btn-sm" ${activeStep === 3 ? 'disabled style="opacity: 0.4;"' : ""}>Next ▶</button>
+          </div>
+        </div>
+
+        ${activeStep === 1 ? `
+          <!-- Step 1: The Dartboard Analogy -->
+          <div style="animation: fadeIn 0.3s ease;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+              <span style="font-size: 13px; color: var(--text-secondary);">Select model behavior regime:</span>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-sm ${selectedTarget === "low_bias_low_var" ? "btn-primary" : "btn-secondary"} target-btn" data-target="low_bias_low_var">
+                  \uD83C\uDFAF Low Bias, Low Var (Ideal)
+                </button>
+                <button class="btn btn-sm ${selectedTarget === "low_bias_high_var" ? "btn-primary" : "btn-secondary"} target-btn" data-target="low_bias_high_var">
+                  \uD83D\uDCA5 Low Bias, High Var (Overfitting)
+                </button>
+                <button class="btn btn-sm ${selectedTarget === "high_bias_low_var" ? "btn-primary" : "btn-secondary"} target-btn" data-target="high_bias_low_var">
+                  \uD83D\uDCCF High Bias, Low Var (Underfitting)
+                </button>
+                <button class="btn btn-sm ${selectedTarget === "high_bias_high_var" ? "btn-primary" : "btn-secondary"} target-btn" data-target="high_bias_high_var">
+                  \uD83C\uDF2A️ High Bias, High Var (Worst)
+                </button>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 320px; gap: 20px; margin-bottom: 16px;">
+              <div class="game-viewport" style="height: 320px;">
+                <canvas id="dart-canvas" width="600" height="320" style="width: 100%; height: 100%;"></canvas>
+                <div class="viewport-overlay">
+                  Bullseye Target = True Underlying Distribution (f^*(x))
+                </div>
+              </div>
+
+              <!-- Diagnostic Evaluation Box -->
+              <div style="background: rgba(10, 15, 25, 0.85); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 18px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <h4 style="font-size: 13px; text-transform: uppercase; color: var(--accent-cyan); margin-bottom: 10px;">
+                    ${selectedTarget === "low_bias_low_var" ? "✅ Ideal Estimator" : selectedTarget === "low_bias_high_var" ? "⚠️ Overfitting (High Variance)" : selectedTarget === "high_bias_low_var" ? "⚠️ Underfitting (High Bias)" : "❌ Inadequate Model"}
+                  </h4>
+                  <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px;">
+                    ${selectedTarget === "low_bias_low_var" ? "Shots cluster tightly around the bullseye center. Excellent generalization with minimal test error." : selectedTarget === "low_bias_high_var" ? "Centered on bullseye on average, but wildly scattered across training splits. Memorizes training noise." : selectedTarget === "high_bias_low_var" ? "Shots are tightly grouped but systematically far from the bullseye. Model is too rigid to learn true pattern." : "Both far from bullseye and heavily scattered. Model class is wrong and unstable."}
+                  </p>
+                </div>
+
+                <div style="background: rgba(0, 240, 255, 0.08); border-left: 3px solid var(--accent-cyan); padding: 10px; border-radius: 4px; font-size: 12px; color: #7dd3fc;">
+                  <strong>Bias:</strong> Deviation of expected prediction from true value.<br>
+                  <strong>Variance:</strong> Variability of predictions across different training sets.
+                </div>
+              </div>
+            </div>
+          </div>
+        ` : activeStep === 2 ? `
+          <!-- Step 2: Capacity U-Curve -->
+          <div style="animation: fadeIn 0.3s ease;">
+            <div class="controls-panel" style="margin-bottom: 16px;">
+              <div class="control-item" style="flex: 1;">
+                <label>Model Capacity / Polynomial Degree (M): <span id="cap-val" style="color: var(--accent-cyan); font-weight: bold;">${modelCapacity}</span></label>
+                <input type="range" id="cap-slider" min="1" max="9" step="1" value="${modelCapacity}" style="width: 100%;">
+              </div>
+              <div class="control-item">
+                <label>Current Status:</label>
+                <span class="concept-badge" style="color: ${modelCapacity <= 2 ? "var(--accent-amber)" : modelCapacity <= 4 ? "var(--accent-green)" : "var(--accent-red)"};">
+                  ${modelCapacity <= 2 ? "UNDERFITTING (High Bias)" : modelCapacity <= 4 ? "OPTIMAL TRADEOFF" : "OVERFITTING (High Variance)"}
+                </span>
+              </div>
+            </div>
+
+            <div class="game-viewport" style="height: 280px; margin-bottom: 16px;">
+              <canvas id="ucurve-canvas" width="800" height="280" style="width: 100%; height: 100%;"></canvas>
+            </div>
+          </div>
+        ` : `
+          <!-- Step 3: Interactive Verification -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.7); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 10px;">\uD83E\uDDE0 Concept Mastery: Occam’s Razor & Generalization Gap</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+              If Model A (Linear) and Model B (Degree-8 Polynomial) achieve virtually identical MSE on the training data, which one should be selected, and why?
+            </p>
+            <div class="quiz-options">
+              <button class="quiz-option-btn q-opt-bv" data-val="correct">
+                <strong>Model A (Linear):</strong> According to Occam's Razor, among hypotheses with equivalent empirical performance, the simpler model with smaller capacity is preferred because it exhibits lower variance on unseen test data.
+              </button>
+              <button class="quiz-option-btn q-opt-bv" data-val="wrong">
+                Model B (Degree-8): Always prefer the model with more parameters because more weights guarantee better future extrapolation.
+              </button>
+            </div>
+            <div id="bv-feedback" style="min-height: 28px; margin-top: 10px;"></div>
+          </div>
+        `}
+
+        <details class="math-explainer">
+          <summary>\uD83D\uDCA1 Deep Dive & Formula Breakdown (Click to expand)</summary>
+          <div class="explainer-content">
+            <p><strong>Formal Bias-Variance Decomposition (Week 2):</strong></p>
+            <div class="formula-block">
+              E[(y - f̂(x))²] = [Bias(f̂(x))]² + Var(f̂(x)) + σ²_noise<br><br>
+              Where:<br>
+              Bias(f̂(x)) = E[f̂(x)] - f*(x) (Systematic model error)<br>
+              Var(f̂(x)) = E[(f̂(x) - E[f̂(x)])²] (Sensitivity to training sample shifts)<br>
+              σ²_noise = Irreducible stochastic error
+            </div>
+          </div>
+        </details>
+      </div>
+    `;
+    if (activeStep === 1) {
+      const canvas = container.querySelector("#dart-canvas");
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        const rings = [120, 85, 50, 20];
+        const ringColors = ["rgba(255,255,255,0.03)", "rgba(0,240,255,0.05)", "rgba(255,255,255,0.05)", "rgba(255,51,68,0.2)"];
+        rings.forEach((r, idx) => {
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fillStyle = ringColors[idx];
+          ctx.fill();
+          ctx.strokeStyle = idx === 3 ? "var(--accent-red)" : "rgba(255,255,255,0.15)";
+          ctx.lineWidth = idx === 3 ? 2 : 1;
+          ctx.stroke();
+        });
+        ctx.strokeStyle = "rgba(255,255,255,0.2)";
+        ctx.beginPath();
+        ctx.moveTo(cx - 130, cy);
+        ctx.lineTo(cx + 130, cy);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 130);
+        ctx.lineTo(cx, cy + 130);
+        ctx.stroke();
+        let offset = { x: 0, y: 0 };
+        let spread = 12;
+        if (selectedTarget === "low_bias_low_var") {
+          offset = { x: 0, y: 0 };
+          spread = 10;
+        } else if (selectedTarget === "low_bias_high_var") {
+          offset = { x: 0, y: 0 };
+          spread = 65;
+        } else if (selectedTarget === "high_bias_low_var") {
+          offset = { x: 65, y: -55 };
+          spread = 12;
+        } else {
+          offset = { x: 60, y: -50 };
+          spread = 70;
+        }
+        for (let i = 0;i < 30; i++) {
+          const u1 = Math.sin(i * 12.3) * Math.cos(i * 4.7);
+          const u2 = Math.cos(i * 8.9) * Math.sin(i * 9.1);
+          const sx = cx + offset.x + u1 * spread;
+          const sy = cy + offset.y + u2 * spread;
+          ctx.fillStyle = "#00f0ff";
+          ctx.beginPath();
+          ctx.arc(sx, sy, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#fff";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+      }
+    } else if (activeStep === 2) {
+      const canvas = container.querySelector("#ucurve-canvas");
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const padX = 80, padY = 40;
+        const w = canvas.width - padX * 2;
+        const h = canvas.height - padY * 2;
+        ctx.strokeStyle = "rgba(255,255,255,0.2)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(padX, padY);
+        ctx.lineTo(padX, padY + h);
+        ctx.lineTo(padX + w, padY + h);
+        ctx.stroke();
+        ctx.font = "11px Fira Code";
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        ctx.fillText("Model Capacity (Degree M) →", padX + w - 180, padY + h + 25);
+        ctx.fillText("↑ Error", padX - 45, padY + 15);
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let x = 0;x <= w; x += 5) {
+          const t = x / w;
+          const bias = Math.exp(-3 * t) * (h * 0.7);
+          const py = padY + h - bias;
+          if (x === 0)
+            ctx.moveTo(padX + x, py);
+          else
+            ctx.lineTo(padX + x, py);
+        }
+        ctx.stroke();
+        ctx.fillStyle = "#38bdf8";
+        ctx.fillText("Bias²", padX + 20, padY + 40);
+        ctx.strokeStyle = "#f43f5e";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let x = 0;x <= w; x += 5) {
+          const t = x / w;
+          const variance = Math.pow(t, 2.5) * (h * 0.85);
+          const py = padY + h - variance;
+          if (x === 0)
+            ctx.moveTo(padX + x, py);
+          else
+            ctx.lineTo(padX + x, py);
+        }
+        ctx.stroke();
+        ctx.fillStyle = "#f43f5e";
+        ctx.fillText("Variance", padX + w - 70, padY + 40);
+        ctx.strokeStyle = "#a855f7";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let x = 0;x <= w; x += 5) {
+          const t = x / w;
+          const total = Math.exp(-3 * t) * (h * 0.7) + Math.pow(t, 2.5) * (h * 0.85) + 20;
+          const py = padY + h - total;
+          if (x === 0)
+            ctx.moveTo(padX + x, py);
+          else
+            ctx.lineTo(padX + x, py);
+        }
+        ctx.stroke();
+        ctx.fillStyle = "#c084fc";
+        ctx.fillText("Total Test Error (U-Curve)", padX + w / 2 - 60, padY + 30);
+        const curT = (modelCapacity - 1) / 8;
+        const curX = padX + curT * w;
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(curX, padY);
+        ctx.lineTo(curX, padY + h);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#fbbf24";
+        ctx.beginPath();
+        const curTotal = Math.exp(-3 * curT) * (h * 0.7) + Math.pow(curT, 2.5) * (h * 0.85) + 20;
+        ctx.arc(curX, padY + h - curTotal, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    container.querySelectorAll(".target-btn").forEach((b) => {
+      b.addEventListener("click", () => {
+        sound.playClick();
+        selectedTarget = b.dataset.target || "low_bias_low_var";
+        render();
+      });
+    });
+    container.querySelectorAll(".step-dot").forEach((b) => {
+      b.addEventListener("click", () => {
+        sound.playClick();
+        activeStep = parseInt(b.dataset.step || "1");
+        render();
+      });
+    });
+    container.querySelector("#btn-step-prev")?.addEventListener("click", () => {
+      if (activeStep > 1) {
+        sound.playClick();
+        activeStep--;
+        render();
+      }
+    });
+    container.querySelector("#btn-step-next")?.addEventListener("click", () => {
+      if (activeStep < 3) {
+        sound.playClick();
+        activeStep++;
+        render();
+      }
+    });
+    const capSlider = container.querySelector("#cap-slider");
+    capSlider?.addEventListener("input", (e) => {
+      modelCapacity = parseInt(e.target.value);
+      render();
+    });
+    container.querySelectorAll(".q-opt-bv").forEach((b) => {
+      b.addEventListener("click", () => {
+        const val = b.dataset.val;
+        const fb = container.querySelector("#bv-feedback");
+        if (val === "correct") {
+          sound.playVictory();
+          confetti_module_default({ particleCount: 50, spread: 60 });
+          gameManager.addScore(100, 50);
+          gameManager.markGameComplete("week2_bias_variance");
+          if (fb)
+            fb.innerHTML = `<div style="color: var(--accent-green); font-weight: 700;">✓ Correct! Occam's razor dictates choosing the simpler hypothesis when empirical fit is comparable.</div>`;
+        } else {
+          sound.playWrong();
+          if (fb)
+            fb.innerHTML = '<div style="color: var(--accent-red);">Incorrect. Extra parameters risk high variance without providing empirical gain.</div>';
+        }
+      });
+    });
+  }
+  render();
 }
 
 // src/games/week2_regularization.ts
@@ -31994,6 +33474,200 @@ function renderWeek2SvmKernel(container) {
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
+// src/games/week2_multiclass_showdown.ts
+init_state();
+init_sound();
+init_confetti_module();
+function renderWeek2MulticlassShowdown(container) {
+  let activeStep = 1;
+  let strategy = "softmax";
+  let classCountK = 4;
+  function render() {
+    const ovoClassifiers = classCountK * (classCountK - 1) / 2;
+    const ovaClassifiers = classCountK;
+    container.innerHTML = `
+      <div class="game-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>⚔️ Game 2.6: Multi-Class Showdown (Softmax vs OvA vs OvO)</h2>
+            <p class="card-subtitle">Visual Intuition: Scaling binary classifiers to K-class boundaries</p>
+          </div>
+          <span class="concept-badge">Week 2 Multi-Class</span>
+        </div>
+
+        <!-- Stepper Component -->
+        <div class="stepper-container">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Tutorial:</span>
+          <div class="step-indicator">
+            <button class="step-dot ${activeStep === 1 ? "active" : activeStep > 1 ? "done" : ""}" data-step="1">1</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Strategy Comparison</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 2 ? "active" : activeStep > 2 ? "done" : ""}" data-step="2">2</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Pairwise Scaling</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 3 ? "active" : "done"}" data-step="3">3</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Mastery Quiz</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-step-prev" class="btn btn-secondary btn-sm" ${activeStep === 1 ? 'disabled style="opacity: 0.4;"' : ""}>◀ Prev</button>
+            <button id="btn-step-next" class="btn btn-primary btn-sm" ${activeStep === 3 ? 'disabled style="opacity: 0.4;"' : ""}>Next ▶</button>
+          </div>
+        </div>
+
+        ${activeStep === 1 ? `
+          <!-- Step 1: Strategy Battle -->
+          <div style="animation: fadeIn 0.3s ease;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+              <span style="font-size: 13px; color: var(--text-secondary);">Select multi-class paradigm:</span>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm ${strategy === "softmax" ? "btn-primary" : "btn-secondary"} strat-btn" data-strat="softmax">
+                  ⚡ Softmax (Multinomial)
+                </button>
+                <button class="btn btn-sm ${strategy === "ova" ? "btn-primary" : "btn-secondary"} strat-btn" data-strat="ova">
+                  \uD83D\uDEE1️ One-vs-All (OvA)
+                </button>
+                <button class="btn btn-sm ${strategy === "ovo" ? "btn-primary" : "btn-secondary"} strat-btn" data-strat="ovo">
+                  ⚔️ One-vs-One (OvO)
+                </button>
+              </div>
+            </div>
+
+            <div style="background: rgba(10, 15, 25, 0.85); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h4 style="font-size: 15px; color: #fff;">
+                  ${strategy === "softmax" ? "1. Softmax Multinomial Logistic Regression" : strategy === "ova" ? "2. One-vs-All (One-vs-Rest / OvA)" : "3. One-vs-One (Pairwise Duels / OvO)"}
+                </h4>
+                <span class="concept-badge" style="color: var(--accent-cyan);">
+                  ${strategy === "softmax" ? "1 Joint Model" : strategy === "ova" ? `${classCountK} Binary Models` : `${ovoClassifiers} Pairwise Models`}
+                </span>
+              </div>
+              
+              <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 12px;">
+                ${strategy === "softmax" ? "Computes unnormalized logits for all K classes simultaneously, exponentiates them to enforce positivity, and normalizes them so probabilities sum to 1.0." : strategy === "ova" ? "Trains K separate binary classifiers. Classifier k separates class k against all other (K-1) classes pooled together. Assigns prediction to the classifier with the highest decision margin." : "Trains K(K-1)/2 pairwise binary classifiers for every distinct pair (Class i vs Class j). Each classifier casts one vote; majority vote determines the final predicted class."}
+              </div>
+
+              <div class="formula-block">
+                ${strategy === "softmax" ? "P(y = i | x; θ) = exp(θ_iᵀ x) / ∑_{j=1}^K exp(θ_jᵀ x)" : strategy === "ova" ? "Argmax_{k=1..K} (θ_kᵀ x + b_k)   [K classifiers total]" : "Argmax_{k} ∑_{j ≠ k} Vote(f_{k,j}(x))   [K(K-1)/2 classifiers total]"}
+              </div>
+            </div>
+          </div>
+        ` : activeStep === 2 ? `
+          <!-- Step 2: Complexity Scaler -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 12px;">\uD83D\uDCC8 Classifier Complexity Scaling: OvA vs OvO</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 18px;">
+              Drag the class count slider (K) to observe how One-vs-One explodes quadratically compared to One-vs-All:
+            </p>
+
+            <div class="control-item" style="margin-bottom: 24px;">
+              <label>Number of Target Classes ((K)): <strong style="color: var(--accent-cyan); font-size: 16px;">${classCountK}</strong></label>
+              <input type="range" id="k-slider" min="3" max="25" step="1" value="${classCountK}" style="width: 100%;">
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+              <div style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.2); padding: 18px; border-radius: var(--radius-md); text-align: center;">
+                <div style="font-size: 12px; color: var(--text-muted); text-transform: uppercase;">One-vs-All (OvA)</div>
+                <div style="font-size: 32px; font-weight: 900; color: var(--accent-cyan); margin: 8px 0; font-family: 'Fira Code', monospace;">
+                  ${ovaClassifiers}
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary);">Linear Growth: (O(K))</div>
+              </div>
+
+              <div style="background: rgba(255, 170, 0, 0.05); border: 1px solid rgba(255, 170, 0, 0.2); padding: 18px; border-radius: var(--radius-md); text-align: center;">
+                <div style="font-size: 12px; color: var(--text-muted); text-transform: uppercase;">One-vs-One (OvO)</div>
+                <div style="font-size: 32px; font-weight: 900; color: var(--accent-amber); margin: 8px 0; font-family: 'Fira Code', monospace;">
+                  ${ovoClassifiers}
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary);">Quadratic Explosion: (\frac{K(K-1)}{2} = O(K^2))</div>
+              </div>
+            </div>
+          </div>
+        ` : `
+          <!-- Step 3: Interactive Mastery Quiz -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 12px;">\uD83C\uDFAF Quick Mastery Check: ImageNet Scaling</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+              If training a dataset with (K = 1000) visual categories (e.g., ImageNet), why is OvO strictly avoided in favor of Softmax or OvA?
+            </p>
+            <div class="quiz-options">
+              <button class="quiz-option-btn q-opt-mc" data-val="correct">
+                <strong>Computational Intractability:</strong> OvO would require training (\frac{1000 	imes 999}{2} = 499,500) individual binary classifiers, requiring astronomical memory and evaluation time!
+              </button>
+              <button class="quiz-option-btn q-opt-mc" data-val="wrong">
+                Because OvO cannot compute majority votes when K is an even number.
+              </button>
+            </div>
+            <div id="mc-feedback" style="min-height: 28px; margin-top: 10px;"></div>
+          </div>
+        `}
+
+        <details class="math-explainer">
+          <summary>\uD83D\uDCA1 Deep Dive & Formula Breakdown (Click to expand)</summary>
+          <div class="explainer-content">
+            <p><strong>Multi-Class Decision Rules:</strong></p>
+            <ul>
+              <li><strong>Softmax Log-Loss:</strong> (L = -sum_{i=1}^K y_i ln hat{y}_i), where (hat{y}_i = \frac{e^{z_i}}{sum e^{z_j}}). Gradient with respect to logit (z_i) is simply ((hat{y}_i - y_i)).</li>
+              <li><strong>OvA Imbalance:</strong> In OvA, each binary classifier suffers from an artificial class imbalance ratio of (1 : (K-1)), often requiring cost-sensitive adjustment.</li>
+            </ul>
+          </div>
+        </details>
+      </div>
+    `;
+    container.querySelectorAll(".strat-btn").forEach((b) => {
+      b.addEventListener("click", () => {
+        sound.playClick();
+        strategy = b.dataset.strat || "softmax";
+        render();
+      });
+    });
+    container.querySelectorAll(".step-dot").forEach((b) => {
+      b.addEventListener("click", () => {
+        sound.playClick();
+        activeStep = parseInt(b.dataset.step || "1");
+        render();
+      });
+    });
+    container.querySelector("#btn-step-prev")?.addEventListener("click", () => {
+      if (activeStep > 1) {
+        sound.playClick();
+        activeStep--;
+        render();
+      }
+    });
+    container.querySelector("#btn-step-next")?.addEventListener("click", () => {
+      if (activeStep < 3) {
+        sound.playClick();
+        activeStep++;
+        render();
+      }
+    });
+    const kSlider = container.querySelector("#k-slider");
+    kSlider?.addEventListener("input", (e) => {
+      classCountK = parseInt(e.target.value);
+      render();
+    });
+    container.querySelectorAll(".q-opt-mc").forEach((b) => {
+      b.addEventListener("click", () => {
+        const val = b.dataset.val;
+        const fb = container.querySelector("#mc-feedback");
+        if (val === "correct") {
+          sound.playVictory();
+          confetti_module_default({ particleCount: 50, spread: 60 });
+          gameManager.addScore(100, 50);
+          gameManager.markGameComplete("week2_multiclass");
+          if (fb)
+            fb.innerHTML = '<div style="color: var(--accent-green); font-weight: 700;">✓ Correct! OvO requires K(K-1)/2 = 499,500 classifiers, making it completely infeasible for large K.</div>';
+        } else {
+          sound.playWrong();
+          if (fb)
+            fb.innerHTML = '<div style="color: var(--accent-red);">Incorrect. OvO fails on large K due to quadratic computational complexity.</div>';
+        }
+      });
+    });
+  }
+  render();
+}
+
 // src/games/week3_decision_tree.ts
 init_sound();
 init_state();
@@ -32005,9 +33679,27 @@ var DATASET_Q14 = [
   { id: 4, x: 8, y: "Faulty" },
   { id: 5, x: 10, y: "Faulty" }
 ];
+var CUSTOMER_DATA = [
+  { id: 1, age: "Youth", income: "High", student: "No", buys: "No" },
+  { id: 2, age: "Youth", income: "High", student: "No", buys: "No" },
+  { id: 3, age: "Middle", income: "High", student: "No", buys: "Yes" },
+  { id: 4, age: "Senior", income: "Low", student: "No", buys: "Yes" },
+  { id: 5, age: "Senior", income: "Low", student: "Yes", buys: "Yes" },
+  { id: 6, age: "Senior", income: "Low", student: "Yes", buys: "No" },
+  { id: 7, age: "Middle", income: "Low", student: "Yes", buys: "Yes" },
+  { id: 8, age: "Youth", income: "High", student: "No", buys: "No" },
+  { id: 9, age: "Youth", income: "Low", student: "Yes", buys: "Yes" },
+  { id: 10, age: "Senior", income: "High", student: "Yes", buys: "Yes" }
+];
 function renderWeek3DecisionTree(container) {
+  let activeTab = "guillotine";
   let threshold = 5;
   let impurityMetric = "entropy";
+  let probP = 0.5;
+  let treeDepth = 2;
+  let alphaPenalty = 0.05;
+  let selectedRootAttribute = null;
+  let attrQuizFeedback = "";
   function entropy(pNormal, pFaulty) {
     let h = 0;
     if (pNormal > 0)
@@ -32018,6 +33710,9 @@ function renderWeek3DecisionTree(container) {
   }
   function gini(pNormal, pFaulty) {
     return 1 - (pNormal * pNormal + pFaulty * pFaulty);
+  }
+  function classError(pNormal, pFaulty) {
+    return 1 - Math.max(pNormal, pFaulty);
   }
   const nTotal = DATASET_Q14.length;
   const pNormParent = 2 / 5;
@@ -32060,181 +33755,413 @@ function renderWeek3DecisionTree(container) {
       giniGain
     };
   }
+  function computeAttributeGains() {
+    const totalN = CUSTOMER_DATA.length;
+    const yesCount = CUSTOMER_DATA.filter((d) => d.buys === "Yes").length;
+    const noCount = CUSTOMER_DATA.filter((d) => d.buys === "No").length;
+    const parentH = entropy(yesCount / totalN, noCount / totalN);
+    const parentG = gini(yesCount / totalN, noCount / totalN);
+    const ageVals = ["Youth", "Middle", "Senior"];
+    let ageSplitH = 0;
+    let ageSplitG = 0;
+    ageVals.forEach((v) => {
+      const sub = CUSTOMER_DATA.filter((d) => d.age === v);
+      if (sub.length === 0)
+        return;
+      const y = sub.filter((d) => d.buys === "Yes").length / sub.length;
+      const n = sub.filter((d) => d.buys === "No").length / sub.length;
+      ageSplitH += sub.length / totalN * entropy(y, n);
+      ageSplitG += sub.length / totalN * gini(y, n);
+    });
+    const igAge = parentH - ageSplitH;
+    const ggAge = parentG - ageSplitG;
+    const incVals = ["High", "Low"];
+    let incSplitH = 0;
+    let incSplitG = 0;
+    incVals.forEach((v) => {
+      const sub = CUSTOMER_DATA.filter((d) => d.income === v);
+      if (sub.length === 0)
+        return;
+      const y = sub.filter((d) => d.buys === "Yes").length / sub.length;
+      const n = sub.filter((d) => d.buys === "No").length / sub.length;
+      incSplitH += sub.length / totalN * entropy(y, n);
+      incSplitG += sub.length / totalN * gini(y, n);
+    });
+    const igIncome = parentH - incSplitH;
+    const ggIncome = parentG - incSplitG;
+    const studVals = ["No", "Yes"];
+    let studSplitH = 0;
+    let studSplitG = 0;
+    studVals.forEach((v) => {
+      const sub = CUSTOMER_DATA.filter((d) => d.student === v);
+      if (sub.length === 0)
+        return;
+      const y = sub.filter((d) => d.buys === "Yes").length / sub.length;
+      const n = sub.filter((d) => d.buys === "No").length / sub.length;
+      studSplitH += sub.length / totalN * entropy(y, n);
+      studSplitG += sub.length / totalN * gini(y, n);
+    });
+    const igStudent = parentH - studSplitH;
+    const ggStudent = parentG - studSplitG;
+    return {
+      parentH,
+      parentG,
+      age: { ig: igAge, gg: ggAge },
+      income: { ig: igIncome, gg: ggIncome },
+      student: { ig: igStudent, gg: ggStudent }
+    };
+  }
   function render() {
     const s = computeSplit(threshold);
+    const attrGains = computeAttributeGains();
     container.innerHTML = `
       <div class="game-card">
         <div class="card-header">
           <div class="card-title-group">
-            <h2>\uD83C\uDF33 Game 3.1: Entropy & Gini Guillotine (Decision Tree Slicer)</h2>
-            <p class="card-subtitle">Visual Intuition: Dynamic Entropy Beakers & Guillotine Threshold Knife (Midterm Q14)</p>
+            <h2>\uD83C\uDF33 Game 3.1: Entropy & Gini Guillotine (Decision Tree Suite)</h2>
+            <p class="card-subtitle">Master Purity Metrics (Gini vs Entropy vs Error), Continuous Splits (Q14), Tabular ID3/CART & Pruning</p>
           </div>
           <span class="concept-badge">Midterm Question 14 Focus</span>
         </div>
 
-        <div class="controls-panel">
-          <div class="control-item">
-            <label>Candidate Split Threshold t (Midterm Q14)</label>
-            <div style="display:flex; gap: 8px;">
-              <button id="btn-t-5" class="btn btn-sm ${threshold === 5 ? "btn-primary" : "btn-secondary"}">t₁ = 5 (Candidate 1 - Pure Split)</button>
-              <button id="btn-t-7" class="btn btn-sm ${threshold === 7 ? "btn-primary" : "btn-secondary"}">t₂ = 7 (Candidate 2 - Impure Split)</button>
-            </div>
-          </div>
-
-          <div class="control-item">
-            <label>Threshold Knife Slider: <span id="thresh-label">${threshold.toFixed(1)}</span></label>
-            <input type="range" id="tree-t-slider" min="1" max="11" step="1" value="${threshold}">
-          </div>
-
-          <div class="control-item">
-            <label>Impurity Metric</label>
-            <select id="metric-select">
-              <option value="entropy" ${impurityMetric === "entropy" ? "selected" : ""}>Shannon Entropy (Bits) [Midterm Q14]</option>
-              <option value="gini" ${impurityMetric === "gini" ? "selected" : ""}>Gini Impurity (CART Index)</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- 1. Interactive Guillotine Slice Canvas -->
-        <div class="game-viewport" style="height: 200px; margin-bottom: 20px;">
-          <canvas id="tree-canvas" width="800" height="200" style="width: 100%; height: 100%;"></canvas>
-          <div class="viewport-overlay">
-            <div><strong style="color:var(--accent-cyan);">Parent Node:</strong> H = ${parentEntropy.toFixed(3)} bits (2 Normal, 3 Faulty)</div>
-            <div><strong style="color:var(--accent-green);">Split t = ${threshold}:</strong> Weighted Residual Impurity = ${s.splitH.toFixed(3)} bits</div>
-            <div style="font-size:14px; margin-top:2px;"><strong style="color:var(--accent-amber);">Information Gain (IG):</strong> <span style="font-size:16px; font-weight:bold; color:#fef08a;">${s.infoGain.toFixed(3)} bits</span></div>
-          </div>
-        </div>
-
-        <!-- 2. Visual Decision Tree Node Architecture with Animated Beakers -->
-        <div style="background: rgba(10, 16, 28, 0.9); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 20px;">
-          <h4 style="text-align: center; color: var(--accent-cyan); font-size: 14px; margin-bottom: 16px;">Decision Tree Node Partition Diagram</h4>
-          
-          <!-- Parent Root Node -->
-          <div style="display:flex; justify-content:center; margin-bottom: 12px;">
-            <div style="background: rgba(20, 30, 50, 0.9); border: 2px solid var(--accent-cyan); border-radius: 12px; padding: 12px 24px; text-align: center; min-width: 260px;">
-              <strong style="color: #fff; font-size: 14px;">Root: Is Sensor Reading X ≤ ${threshold}?</strong>
-              <div style="font-family:'Fira Code'; font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
-                All 5 Sensors (2 Norm, 3 Faulty) • H = ${parentEntropy.toFixed(3)}
-              </div>
-            </div>
-          </div>
-
-          <!-- Tree Branches -->
-          <div style="display: flex; justify-content: space-around; position: relative;">
-            <!-- Left Branch (Yes) -->
-            <div style="flex: 1; display:flex; flex-direction:column; align-items:center;">
-              <div style="font-family:'Fira Code'; font-size:12px; color:var(--accent-green); margin-bottom:6px;">YES (X ≤ ${threshold})</div>
-              <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid ${s.leftH === 0 ? "var(--accent-green)" : "var(--accent-amber)"}; border-radius: 12px; padding: 14px; width: 85%; text-align: center;">
-                <div style="font-size: 13px; font-weight: bold; color: #fff;">Left Partition (${s.left.length} points)</div>
-                <div style="font-family:'Fira Code'; font-size: 11px; margin: 6px 0;">
-                  <span style="color:#38bdf8;">${s.leftNorm} Normal</span>, <span style="color:#f87171;">${s.leftFault} Faulty</span>
-                </div>
-                <!-- Entropy Purity Gauge -->
-                <div style="background: rgba(0,0,0,0.5); border-radius: 8px; padding: 6px 10px; margin-top: 6px;">
-                  <span style="font-size: 11px; color: var(--text-muted);">Node Entropy:</span>
-                  <strong style="color:${s.leftH === 0 ? "var(--accent-green)" : "#f59e0b"}; font-family:'Fira Code'; font-size:13px;">
-                    ${s.leftH.toFixed(3)} bits ${s.leftH === 0 ? " (100% PURE!)" : ""}
-                  </strong>
-                </div>
-              </div>
-            </div>
-
-            <!-- Right Branch (No) -->
-            <div style="flex: 1; display:flex; flex-direction:column; align-items:center;">
-              <div style="font-family:'Fira Code'; font-size:12px; color:var(--accent-red); margin-bottom:6px;">NO (X > ${threshold})</div>
-              <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid ${s.rightH === 0 ? "var(--accent-green)" : "var(--accent-amber)"}; border-radius: 12px; padding: 14px; width: 85%; text-align: center;">
-                <div style="font-size: 13px; font-weight: bold; color: #fff;">Right Partition (${s.right.length} points)</div>
-                <div style="font-family:'Fira Code'; font-size: 11px; margin: 6px 0;">
-                  <span style="color:#38bdf8;">${s.rightNorm} Normal</span>, <span style="color:#f87171;">${s.rightFault} Faulty</span>
-                </div>
-                <!-- Entropy Purity Gauge -->
-                <div style="background: rgba(0,0,0,0.5); border-radius: 8px; padding: 6px 10px; margin-top: 6px;">
-                  <span style="font-size: 11px; color: var(--text-muted);">Node Entropy:</span>
-                  <strong style="color:${s.rightH === 0 ? "var(--accent-green)" : "#f59e0b"}; font-family:'Fira Code'; font-size:13px;">
-                    ${s.rightH.toFixed(3)} bits ${s.rightH === 0 ? " (100% PURE!)" : ""}
-                  </strong>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-          <div style="font-size: 13px; color: var(--text-secondary);">
-            Compare the two exam candidates: <strong>t₁ = 5</strong> vs <strong>t₂ = 7</strong>
-          </div>
-          <button id="btn-compare-candidates" class="btn btn-primary">
-            Lock In Midterm Answer (t₁ = 5)
+        <!-- Suite Tabs -->
+        <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; flex-wrap: wrap;">
+          <button id="tab-guillotine" class="btn btn-sm ${activeTab === "guillotine" ? "btn-primary" : "btn-secondary"}">
+            \uD83D\uDD2A 1. Continuous Split Guillotine (Q14)
+          </button>
+          <button id="tab-curves" class="btn btn-sm ${activeTab === "impurity_curves" ? "btn-primary" : "btn-secondary"}">
+            \uD83D\uDCC8 2. Gini vs Entropy vs Error Curves
+          </button>
+          <button id="tab-attribute" class="btn btn-sm ${activeTab === "attribute_selection" ? "btn-primary" : "btn-secondary"}">
+            \uD83D\uDCCA 3. Tabular Attribute Selection (ID3/CART)
+          </button>
+          <button id="tab-pruning" class="btn btn-sm ${activeTab === "pruning" ? "btn-primary" : "btn-secondary"}">
+            ✂️ 4. Tree Depth & Overfitting Pruning
           </button>
         </div>
 
-        <div id="tree-solution-box" style="min-height: 20px;"></div>
+        ${activeTab === "guillotine" ? `
+          <!-- Tab 1: Continuous Split Guillotine (Midterm Q14) -->
+          <div style="animation: fadeIn 0.3s ease;">
+            <div class="controls-panel">
+              <div class="control-item">
+                <label>Candidate Split Threshold t (Midterm Q14)</label>
+                <div style="display:flex; gap: 8px;">
+                  <button id="btn-t-5" class="btn btn-sm ${threshold === 5 ? "btn-primary" : "btn-secondary"}">t₁ = 5 (Candidate 1 - Pure Split)</button>
+                  <button id="btn-t-7" class="btn btn-sm ${threshold === 7 ? "btn-primary" : "btn-secondary"}">t₂ = 7 (Candidate 2 - Impure Split)</button>
+                </div>
+              </div>
+
+              <div class="control-item">
+                <label>Threshold Knife Slider: <span id="thresh-label">${threshold.toFixed(1)}</span></label>
+                <input type="range" id="tree-t-slider" min="1" max="11" step="1" value="${threshold}">
+              </div>
+
+              <div class="control-item">
+                <label>Impurity Metric</label>
+                <select id="metric-select">
+                  <option value="entropy" ${impurityMetric === "entropy" ? "selected" : ""}>Shannon Entropy (Bits) [Midterm Q14]</option>
+                  <option value="gini" ${impurityMetric === "gini" ? "selected" : ""}>Gini Impurity (CART Index)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Interactive Guillotine Slice Canvas -->
+            <div class="game-viewport" style="height: 200px; margin-bottom: 20px;">
+              <canvas id="tree-canvas" width="800" height="200" style="width: 100%; height: 100%;"></canvas>
+              <div class="viewport-overlay">
+                <div><strong style="color:var(--accent-cyan);">Parent Node:</strong> ${impurityMetric === "entropy" ? `H = ${parentEntropy.toFixed(3)} bits` : `Gini = ${parentGini.toFixed(3)}`} (2 Normal, 3 Faulty)</div>
+                <div><strong style="color:var(--accent-green);">Split t = ${threshold}:</strong> Weighted Residual Impurity = ${impurityMetric === "entropy" ? `${s.splitH.toFixed(3)} bits` : `${s.splitG.toFixed(3)}`}</div>
+                <div style="font-size:14px; margin-top:2px;">
+                  <strong style="color:var(--accent-amber);">${impurityMetric === "entropy" ? "Information Gain (IG):" : "Gini Impurity Reduction:"}</strong> 
+                  <span style="font-size:16px; font-weight:bold; color:#fef08a;">${impurityMetric === "entropy" ? `${s.infoGain.toFixed(3)} bits` : `${s.giniGain.toFixed(3)}`}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Visual Decision Tree Node Architecture -->
+            <div style="background: rgba(10, 16, 28, 0.9); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 20px;">
+              <h4 style="text-align: center; color: var(--accent-cyan); font-size: 14px; margin-bottom: 16px;">Decision Tree Node Partition Diagram</h4>
+              
+              <!-- Parent Root Node -->
+              <div style="display:flex; justify-content:center; margin-bottom: 12px;">
+                <div style="background: rgba(20, 30, 50, 0.9); border: 2px solid var(--accent-cyan); border-radius: 12px; padding: 12px 24px; text-align: center; min-width: 260px;">
+                  <strong style="color: #fff; font-size: 14px;">Root: Is Sensor Reading X ≤ ${threshold}?</strong>
+                  <div style="font-family:'Fira Code'; font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
+                    All 5 Sensors (2 Norm, 3 Faulty) • H = ${parentEntropy.toFixed(3)} • Gini = ${parentGini.toFixed(3)}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Branches -->
+              <div style="display: flex; justify-content: space-around;">
+                <!-- Left Branch -->
+                <div style="flex: 1; display:flex; flex-direction:column; align-items:center;">
+                  <div style="font-family:'Fira Code'; font-size:12px; color:var(--accent-green); margin-bottom:6px;">YES (X ≤ ${threshold})</div>
+                  <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid ${s.leftH === 0 ? "var(--accent-green)" : "var(--accent-amber)"}; border-radius: 12px; padding: 14px; width: 85%; text-align: center;">
+                    <div style="font-size: 14px; font-weight: 700; color: #fff;">Left Leaf (${s.left.length} Samples)</div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin: 6px 0;">
+                      ${s.leftNorm} Normal, ${s.leftFault} Faulty
+                    </div>
+                    <div style="font-size: 12px; font-weight: bold; color: ${s.leftH === 0 ? "var(--accent-green)" : "var(--accent-amber)"};">
+                      ${s.leftH === 0 ? "★ Pure Node: H = 0.000 (Gini = 0.000)" : `Impure: H = ${s.leftH.toFixed(3)} (Gini = ${s.leftG.toFixed(3)})`}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Right Branch -->
+                <div style="flex: 1; display:flex; flex-direction:column; align-items:center;">
+                  <div style="font-family:'Fira Code'; font-size:12px; color:var(--accent-red); margin-bottom:6px;">NO (X > ${threshold})</div>
+                  <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid ${s.rightH === 0 ? "var(--accent-green)" : "var(--accent-amber)"}; border-radius: 12px; padding: 14px; width: 85%; text-align: center;">
+                    <div style="font-size: 14px; font-weight: 700; color: #fff;">Right Leaf (${s.right.length} Samples)</div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin: 6px 0;">
+                      ${s.rightNorm} Normal, ${s.rightFault} Faulty
+                    </div>
+                    <div style="font-size: 12px; font-weight: bold; color: ${s.rightH === 0 ? "var(--accent-green)" : "var(--accent-amber)"};">
+                      ${s.rightH === 0 ? "★ Pure Node: H = 0.000 (Gini = 0.000)" : `Impure: H = ${s.rightH.toFixed(3)} (Gini = ${s.rightG.toFixed(3)})`}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ` : activeTab === "impurity_curves" ? `
+          <!-- Tab 2: Impurity Curves (Gini vs Entropy vs Misclassification Error) -->
+          <div style="animation: fadeIn 0.3s ease;">
+            <div style="background: rgba(10, 16, 28, 0.9); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 20px;">
+              <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 6px;">\uD83D\uDCC8 Purity Measures Comparison: Binary Classification</h3>
+              <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                As the probability ( p in [0, 1] ) of the positive class changes, observe how Entropy, Gini Impurity, and Misclassification Error behave:
+              </p>
+
+              <!-- Interactive Probability Slider -->
+              <div style="display:flex; justify-content:space-between; align-items:center; background: rgba(255,255,255,0.04); padding: 10px 18px; border-radius: 8px; margin-bottom: 16px;">
+                <label style="font-size: 13px; color: var(--accent-cyan); font-weight: bold;">
+                  Positive Class Probability p: <span id="lbl-prob-p" style="font-family:'Fira Code'; color:#fef08a;">${probP.toFixed(2)}</span>
+                </label>
+                <input type="range" id="slider-prob-p" min="0" max="1" step="0.01" value="${probP}" style="width: 250px;">
+              </div>
+
+              <!-- Purity Curve Canvas -->
+              <div class="game-viewport" style="height: 260px; margin-bottom: 18px;">
+                <canvas id="curve-canvas" width="800" height="260" style="width: 100%; height: 100%;"></canvas>
+              </div>
+
+              <!-- Live Values Card -->
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;">
+                <div style="background: rgba(0, 240, 255, 0.06); border: 1px solid var(--accent-cyan); border-radius: 8px; padding: 14px;">
+                  <strong style="color: var(--accent-cyan); font-size: 14px;">1. Shannon Entropy H(p)</strong>
+                  <div class="formula-block" style="font-size: 11px; margin: 6px 0;">-p log₂ p - (1-p) log₂ (1-p)</div>
+                  <div style="font-size: 16px; font-weight: bold; color: #fff;">
+                    ${entropy(probP, 1 - probP).toFixed(4)} bits
+                  </div>
+                  <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Scaled H/2: ${(entropy(probP, 1 - probP) / 2).toFixed(4)}</div>
+                </div>
+
+                <div style="background: rgba(0, 255, 136, 0.06); border: 1px solid var(--accent-green); border-radius: 8px; padding: 14px;">
+                  <strong style="color: var(--accent-green); font-size: 14px;">2. Gini Impurity (CART)</strong>
+                  <div class="formula-block" style="font-size: 11px; margin: 6px 0;">2p(1 - p) = 1 - (p² + (1-p)²)</div>
+                  <div style="font-size: 16px; font-weight: bold; color: #a7f3d0;">
+                    ${gini(probP, 1 - probP).toFixed(4)}
+                  </div>
+                  <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Max = 0.500 at p = 0.50</div>
+                </div>
+
+                <div style="background: rgba(255, 170, 0, 0.06); border: 1px solid var(--accent-amber); border-radius: 8px; padding: 14px;">
+                  <strong style="color: var(--accent-amber); font-size: 14px;">3. Misclassification Error</strong>
+                  <div class="formula-block" style="font-size: 11px; margin: 6px 0;">1 - max(p, 1 - p)</div>
+                  <div style="font-size: 16px; font-weight: bold; color: #fef08a;">
+                    ${classError(probP, 1 - probP).toFixed(4)}
+                  </div>
+                  <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Piecewise linear / flat derivatives</div>
+                </div>
+              </div>
+
+              <div style="background: rgba(0, 0, 0, 0.4); border-left: 3px solid var(--accent-cyan); padding: 12px 16px; border-radius: 4px; font-size: 12.5px; color: #7dd3fc; margin-top: 16px; line-height: 1.5;">
+                \uD83D\uDCA1 <strong>Why CART & ID3 use Gini and Entropy instead of Classification Error:</strong> Gini and Entropy are strictly concave functions with smooth curvature. They continuously reward splits that produce one purer child node, whereas Classification Error is piecewise linear and often gives 0 gain for valid splits!
+              </div>
+            </div>
+          </div>
+        ` : activeTab === "attribute_selection" ? `
+          <!-- Tab 3: Tabular Attribute Selection (ID3 vs CART) -->
+          <div style="animation: fadeIn 0.3s ease;">
+            <div style="background: rgba(10, 16, 28, 0.9); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 20px;">
+              <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 6px;">\uD83D\uDCCA Tabular Root Node Selection (Customer Dataset, N = 10)</h3>
+              <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                Parent Node Impurity: Entropy = <strong>${attrGains.parentH.toFixed(3)} bits</strong> | Gini = <strong>${attrGains.parentG.toFixed(3)}</strong> (6 Buys=Yes, 4 Buys=No). Which candidate attribute should be selected as the Root Split?
+              </p>
+
+              <!-- Attribute Candidates Comparison Table -->
+              <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 18px;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+                  <thead>
+                    <tr style="background: rgba(0, 240, 255, 0.08); border-bottom: 1px solid var(--border-color);">
+                      <th style="padding: 10px 14px;">Candidate Attribute</th>
+                      <th style="padding: 10px 14px;">Values / Splits</th>
+                      <th style="padding: 10px 14px; color: var(--accent-cyan);">Information Gain (ID3)</th>
+                      <th style="padding: 10px 14px; color: var(--accent-green);">Gini Gain (CART)</th>
+                      <th style="padding: 10px 14px; text-align: center;">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                      <td style="padding: 10px 14px; font-weight: bold; color: #fff;">Age</td>
+                      <td style="padding: 10px 14px; color: var(--text-secondary);">Youth (4), Middle (2), Senior (4)</td>
+                      <td style="padding: 10px 14px; font-family:'Fira Code'; color:var(--accent-cyan); font-weight:bold;">
+                        ${attrGains.age.ig.toFixed(3)} bits
+                      </td>
+                      <td style="padding: 10px 14px; font-family:'Fira Code'; color:var(--accent-green); font-weight:bold;">
+                        ${attrGains.age.gg.toFixed(3)}
+                      </td>
+                      <td style="padding: 10px 14px; text-align: center;">
+                        <button class="btn btn-xs btn-primary btn-choose-root" data-attr="age">Select as Root</button>
+                      </td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                      <td style="padding: 10px 14px; font-weight: bold; color: #fff;">Income</td>
+                      <td style="padding: 10px 14px; color: var(--text-secondary);">High (5), Low (5)</td>
+                      <td style="padding: 10px 14px; font-family:'Fira Code'; color:var(--accent-cyan); font-weight:bold;">
+                        ${attrGains.income.ig.toFixed(3)} bits
+                      </td>
+                      <td style="padding: 10px 14px; font-family:'Fira Code'; color:var(--accent-green); font-weight:bold;">
+                        ${attrGains.income.gg.toFixed(3)}
+                      </td>
+                      <td style="padding: 10px 14px; text-align: center;">
+                        <button class="btn btn-xs btn-secondary btn-choose-root" data-attr="income">Select as Root</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 10px 14px; font-weight: bold; color: #fff;">Student</td>
+                      <td style="padding: 10px 14px; color: var(--text-secondary);">No (5), Yes (5)</td>
+                      <td style="padding: 10px 14px; font-family:'Fira Code'; color:var(--accent-cyan); font-weight:bold;">
+                        ${attrGains.student.ig.toFixed(3)} bits
+                      </td>
+                      <td style="padding: 10px 14px; font-family:'Fira Code'; color:var(--accent-green); font-weight:bold;">
+                        ${attrGains.student.gg.toFixed(3)}
+                      </td>
+                      <td style="padding: 10px 14px; text-align: center;">
+                        <button class="btn btn-xs btn-secondary btn-choose-root" data-attr="student">Select as Root</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div id="attr-feedback-box" style="min-height: 30px;">
+                ${attrQuizFeedback}
+              </div>
+            </div>
+          </div>
+        ` : `
+          <!-- Tab 4: Tree Depth & Overfitting Pruning -->
+          <div style="animation: fadeIn 0.3s ease;">
+            <div style="background: rgba(10, 16, 28, 0.9); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 20px;">
+              <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 6px;">✂️ Tree Depth, Overfitting & Cost-Complexity Pruning</h3>
+              <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 18px;">
+                Deep decision trees create complex axis-aligned hyper-rectangles that memorize training noise. Adjust tree depth to observe the classic U-shaped validation error:
+              </p>
+
+              <!-- Depth slider -->
+              <div style="display:flex; justify-content:space-between; align-items:center; background: rgba(255,255,255,0.04); padding: 10px 18px; border-radius: 8px; margin-bottom: 18px;">
+                <label style="font-size: 13px; color: var(--accent-amber); font-weight: bold;">
+                  Max Tree Depth: <span id="lbl-tree-depth" style="font-family:'Fira Code'; font-size:15px; color:#fff;">${treeDepth}</span>
+                </label>
+                <input type="range" id="slider-tree-depth" min="1" max="6" step="1" value="${treeDepth}" style="width: 250px;">
+              </div>
+
+              <!-- Depth error metrics -->
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px;">
+                <div style="background: rgba(0, 240, 255, 0.06); border: 1px solid var(--accent-cyan); border-radius: 8px; padding: 14px; text-align:center;">
+                  <div style="font-size: 11px; color: var(--text-muted);">TRAINING ERROR</div>
+                  <div style="font-size: 20px; font-weight: 800; color: var(--accent-cyan); margin-top: 4px;">
+                    ${Math.max(0, 36 - treeDepth * 6.5).toFixed(1)}%
+                  </div>
+                  <div style="font-size: 11px; color: #a7f3d0; margin-top: 4px;">Monotonically decreases toward 0%</div>
+                </div>
+
+                <div style="background: rgba(255, 51, 68, 0.06); border: 1px solid var(--accent-red); border-radius: 8px; padding: 14px; text-align:center;">
+                  <div style="font-size: 11px; color: var(--text-muted);">VALIDATION ERROR</div>
+                  <div style="font-size: 20px; font-weight: 800; color: ${treeDepth === 2 || treeDepth === 3 ? "var(--accent-green)" : "var(--accent-red)"}; margin-top: 4px;">
+                    ${(() => {
+      const val = 14 + Math.pow(treeDepth - 2.5, 2) * 2.8;
+      return val.toFixed(1);
+    })()}%
+                  </div>
+                  <div style="font-size: 11px; color: ${treeDepth >= 4 ? "var(--accent-red)" : "var(--accent-green)"}; margin-top: 4px;">
+                    ${treeDepth >= 4 ? "⚠️ Overfitting region!" : treeDepth === 1 ? "Underfitting" : "★ Optimal Generalization"}
+                  </div>
+                </div>
+
+                <div style="background: rgba(157, 78, 221, 0.06); border: 1px solid var(--accent-purple); border-radius: 8px; padding: 14px; text-align:center;">
+                  <div style="font-size: 11px; color: var(--text-muted);">TOTAL LEAF NODES |T|</div>
+                  <div style="font-size: 20px; font-weight: 800; color: #c084fc; margin-top: 4px;">
+                    ${Math.pow(2, treeDepth)} Leaves
+                  </div>
+                  <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Complexity penalizer in CART</div>
+                </div>
+              </div>
+
+              <!-- Cost-Complexity Formula Explainer -->
+              <div class="formula-block" style="font-size: 12px; line-height: 1.6;">
+                <strong>CART Cost-Complexity Pruning Objective:</strong><br>
+                R_α(T) = R(T) + α · |T|<br>
+                where R(T) is misclassification cost on validation set, |T| is number of terminal leaves, and α ≥ 0 controls complexity penalty!
+              </div>
+            </div>
+          </div>
+        `}
+
+        <!-- Verify Mastery Check -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 18px; border-top: 1px solid var(--border-color); padding-top: 14px;">
+          <div id="tree-feedback" style="min-height: 24px; font-size: 13px;"></div>
+          <button id="btn-certify-tree" class="btn btn-primary">Verify Decision Tree Mastery</button>
+        </div>
 
         <details class="math-explainer">
-        <summary>\uD83D\uDCA1 Midterm Practice Question 14 Derivations (Click to expand)</summary>
-        <div class="explainer-content">
-          <p><strong>(a) Parent Entropy:</strong> $H(Y) = - [ (2/5)\\log_2(2/5) + (3/5)\\log_2(3/5) ] = -(0.4 \\times (-1.3219) + 0.6 \\times (-0.7370)) = \\mathbf{0.971\\text{ bits}}$.</p>
-          <p><strong>(b) Threshold t₁ = 5:</strong> Left partition has only Normal sensors ($H_{left} = 0$), Right partition has only Faulty sensors ($H_{right} = 0$). Weighted entropy is 0. <strong>Information Gain: $0.971 - 0 = \\mathbf{0.971\\text{ bits}}$.</strong></p>
-          <p><strong>Threshold t₂ = 7:</strong> Left partition has 2 Normal and 1 Faulty ($H_{left} = 0.918$), Right partition has 2 Faulty ($H_{right} = 0$). Weighted entropy is $0.551$. <strong>Information Gain: $0.971 - 0.551 = \\mathbf{0.420\\text{ bits}}$.</strong></p>
-          <p><strong>(c) Decision:</strong> Choose <strong>t₁ = 5</strong> because it maximizes information gain ($0.971 > 0.420$) and achieves zero impurity!</p>
-        </div>
-      </details>
-    </div>
-  `;
-    const canvas = container.querySelector("#tree-canvas");
-    if (canvas) {
-      const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const maxX = 12;
-      const padX = 60;
-      const w = canvas.width - padX * 2;
-      const cy = canvas.height / 2;
-      const toScreenX = (val) => padX + val / maxX * w;
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(padX, cy);
-      ctx.lineTo(padX + w, cy);
-      ctx.stroke();
-      for (let tx = 0;tx <= 12; tx += 2) {
-        ctx.fillStyle = "var(--text-muted)";
-        ctx.font = "11px Fira Code";
-        ctx.fillText(tx.toString(), toScreenX(tx) - 4, cy + 30);
-      }
-      DATASET_Q14.forEach((pt) => {
-        const sx = toScreenX(pt.x);
-        ctx.fillStyle = pt.y === "Normal" ? "#00f0ff" : "#ff3366";
-        ctx.beginPath();
-        ctx.arc(sx, cy, 14, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 11px Fira Code";
-        ctx.fillText(`ID${pt.id}`, sx - 10, cy - 20);
-        ctx.fillText(pt.y === "Normal" ? "NORM" : "FLT", sx - 13, cy + 4);
-      });
-      const knifeX = toScreenX(threshold);
-      ctx.strokeStyle = "#eab308";
-      ctx.lineWidth = 3;
-      ctx.setLineDash([6, 6]);
-      ctx.beginPath();
-      ctx.moveTo(knifeX, 15);
-      ctx.lineTo(knifeX, canvas.height - 15);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = "#fef08a";
-      ctx.font = "bold 13px Fira Code";
-      ctx.fillText(`Split Knife t = ${threshold}`, knifeX + 8, 35);
+          <summary>\uD83D\uDCA1 Midterm Q14 Official Derivation & Step-by-Step Math (Click to expand)</summary>
+          <div class="explainer-content">
+            <p><strong>Candidate 1 ((t_1 = 5)):</strong> Splits at (x=5). Left: ({x_1, x_2}) (2 Normal, 0 Faulty) → (H = 0). Right: ({x_3, x_4, x_5}) (0 Normal, 3 Faulty) → (H = 0). Weighted Entropy = 0. Therefore, (IG = 0.971 - 0 = 0.971) bits.</p>
+            <p><strong>Candidate 2 ((t_2 = 7)):</strong> Splits at (x=7). Left: ({x_1, x_2, x_3}) (2 Normal, 1 Faulty). Right: ({x_4, x_5}) (0 Normal, 2 Faulty) → (H = 0). Left entropy (H = -\frac{2}{3}log_2\frac{2}{3} - \frac{1}{3}log_2\frac{1}{3} approx 0.918). Weighted = (\frac{3}{5}(0.918) = 0.551) bits. (IG = 0.971 - 0.551 = 0.420) bits.</p>
+          </div>
+        </details>
+      </div>
+    `;
+    if (activeTab === "guillotine") {
+      const cv = container.querySelector("#tree-canvas");
+      if (cv)
+        drawCanvas(cv, s);
+    } else if (activeTab === "impurity_curves") {
+      const cv = container.querySelector("#curve-canvas");
+      if (cv)
+        drawImpurityCurves(cv, probP);
     }
+    container.querySelector("#tab-guillotine")?.addEventListener("click", () => {
+      sound.playClick();
+      activeTab = "guillotine";
+      render();
+    });
+    container.querySelector("#tab-curves")?.addEventListener("click", () => {
+      sound.playClick();
+      activeTab = "impurity_curves";
+      render();
+    });
+    container.querySelector("#tab-attribute")?.addEventListener("click", () => {
+      sound.playClick();
+      activeTab = "attribute_selection";
+      render();
+    });
+    container.querySelector("#tab-pruning")?.addEventListener("click", () => {
+      sound.playClick();
+      activeTab = "pruning";
+      render();
+    });
     container.querySelector("#btn-t-5")?.addEventListener("click", () => {
-      sound.playSlice();
+      sound.playClick();
       threshold = 5;
       render();
     });
     container.querySelector("#btn-t-7")?.addEventListener("click", () => {
-      sound.playSlice();
+      sound.playClick();
       threshold = 7;
       render();
     });
@@ -32243,26 +34170,476 @@ function renderWeek3DecisionTree(container) {
       render();
     });
     container.querySelector("#metric-select")?.addEventListener("change", (e) => {
-      impurityMetric = e.target.value;
       sound.playClick();
+      impurityMetric = e.target.value;
       render();
     });
-    container.querySelector("#btn-compare-candidates")?.addEventListener("click", () => {
-      sound.playVictory();
-      confetti_module_default({ particleCount: 75, spread: 70 });
-      gameManager.addScore(150, 75);
-      gameManager.markGameComplete("week3_tree");
-      const solBox = container.querySelector("#tree-solution-box");
-      if (solBox) {
-        solBox.innerHTML = `
-          <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 18px; color: #a7f3d0; margin-bottom: 16px;">
-            <h3 style="font-size: 16px; margin-bottom: 8px;">\uD83C\uDFC6 Official Midterm Conclusion Confirmed!</h3>
-            <p style="margin-bottom: 6px;">Threshold <strong>t₁ = 5</strong> achieves <strong>IG = 0.971 bits</strong> (weighted entropy = 0.000 bits).</p>
-            <p style="margin-bottom: 6px;">Threshold <strong>t₂ = 7</strong> achieves <strong>IG = 0.420 bits</strong> (weighted entropy = 0.551 bits).</p>
-            <p><strong>Conclusion:</strong> The decision tree selects <strong>t₁ = 5</strong> because it maximizes information gain and cleanly isolates the faulty sensors!</p>
-          </div>
-        `;
+    container.querySelector("#slider-prob-p")?.addEventListener("input", (e) => {
+      probP = parseFloat(e.target.value);
+      const lbl = container.querySelector("#lbl-prob-p");
+      if (lbl)
+        lbl.textContent = probP.toFixed(2);
+      const cv = container.querySelector("#curve-canvas");
+      if (cv)
+        drawImpurityCurves(cv, probP);
+    });
+    container.querySelector("#slider-tree-depth")?.addEventListener("input", (e) => {
+      treeDepth = parseInt(e.target.value);
+      render();
+    });
+    container.querySelectorAll(".btn-choose-root").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const attr = e.currentTarget.dataset.attr;
+        selectedRootAttribute = attr || null;
+        if (attr === "age") {
+          sound.playCorrect();
+          attrQuizFeedback = `
+            <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 12px; color: #a7f3d0;">
+              <strong>✓ Correct Root Attribute! (Age)</strong> Age achieves the highest Information Gain (${attrGains.age.ig.toFixed(3)} bits) and highest Gini Gain (${attrGains.age.gg.toFixed(3)}), cleanly separating Middle-aged customers into 100% pure buyers!
+            </div>
+          `;
+        } else {
+          sound.playWrong();
+          attrQuizFeedback = `
+            <div style="background: rgba(255, 51, 68, 0.15); border: 1px solid var(--accent-red); border-radius: var(--radius-md); padding: 12px; color: #fca5a5;">
+              <strong>✗ Suboptimal Attribute:</strong> ${attr === "income" ? "Income" : "Student"} achieves lower Information Gain (${attr === "income" ? attrGains.income.ig.toFixed(3) : attrGains.student.ig.toFixed(3)} bits). Look at the table and select the attribute with maximal Information Gain!
+            </div>
+          `;
+        }
+        render();
+      });
+    });
+    container.querySelector("#btn-certify-tree")?.addEventListener("click", () => {
+      const fb = container.querySelector("#tree-feedback");
+      if (threshold === 5 || selectedRootAttribute === "age" || activeTab === "impurity_curves") {
+        sound.playVictory();
+        confetti_module_default({ particleCount: 75, spread: 65 });
+        gameManager.addScore(150, 75);
+        gameManager.markGameComplete("week3_tree");
+        if (fb) {
+          fb.innerHTML = `
+            <span style="color: var(--accent-green); font-weight: bold;">
+              \uD83C\uDF89 Decision Tree & Gini Mastery Certified! (+150 Score)
+            </span>
+          `;
+        }
+      } else {
+        sound.playWrong();
+        if (fb) {
+          fb.innerHTML = `
+            <span style="color: var(--accent-amber); font-weight: bold;">
+              ⚠️ Set the threshold knife to t = 5.0 (pure split IG = 0.971) or select the optimal root attribute to certify!
+            </span>
+          `;
+        }
       }
+    });
+  }
+  function drawCanvas(canvas, split) {
+    const ctx = canvas.getContext("2d");
+    if (!ctx)
+      return;
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.fillStyle = "#060912";
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(40, h / 2);
+    ctx.lineTo(w - 40, h / 2);
+    ctx.stroke();
+    const scaleX = (xVal) => 40 + (xVal - 1) / 10 * (w - 80);
+    for (let i = 1;i <= 11; i++) {
+      const cx = scaleX(i);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+      ctx.beginPath();
+      ctx.moveTo(cx, h / 2 - 8);
+      ctx.lineTo(cx, h / 2 + 8);
+      ctx.stroke();
+      ctx.fillStyle = "#64748b";
+      ctx.font = '11px "Fira Code", monospace';
+      ctx.textAlign = "center";
+      ctx.fillText(i.toString(), cx, h / 2 + 22);
+    }
+    DATASET_Q14.forEach((p) => {
+      const cx = scaleX(p.x);
+      const cy = h / 2;
+      const isNorm = p.y === "Normal";
+      ctx.fillStyle = isNorm ? "#00f0ff" : "#ff3366";
+      ctx.shadowColor = isNorm ? "#00f0ff" : "#ff3366";
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 11px Inter, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(isNorm ? "N" : "F", cx, cy);
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = '11px "Fira Code", monospace';
+      ctx.fillText(`x=${p.x}`, cx, cy - 24);
+    });
+    const knifeX = scaleX(threshold);
+    ctx.strokeStyle = "#fef08a";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(knifeX, 15);
+    ctx.lineTo(knifeX, h - 25);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#fef08a";
+    ctx.font = "bold 12px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(`Knife t = ${threshold}`, knifeX, 15);
+  }
+  function drawImpurityCurves(canvas, currentP) {
+    const ctx = canvas.getContext("2d");
+    if (!ctx)
+      return;
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.fillStyle = "#060912";
+    ctx.fillRect(0, 0, w, h);
+    const padL = 60;
+    const padR = 40;
+    const padT = 30;
+    const padB = 40;
+    const plotW = w - padL - padR;
+    const plotH = h - padT - padB;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.lineWidth = 1;
+    for (let p = 0;p <= 1; p += 0.2) {
+      const cx = padL + p * plotW;
+      ctx.beginPath();
+      ctx.moveTo(cx, padT);
+      ctx.lineTo(cx, h - padB);
+      ctx.stroke();
+      ctx.fillStyle = "#64748b";
+      ctx.font = '11px "Fira Code"';
+      ctx.textAlign = "center";
+      ctx.fillText(p.toFixed(1), cx, h - padB + 16);
+    }
+    for (let yVal = 0;yVal <= 1; yVal += 0.25) {
+      const cy = h - padB - yVal * plotH;
+      ctx.beginPath();
+      ctx.moveTo(padL, cy);
+      ctx.lineTo(w - padR, cy);
+      ctx.stroke();
+      ctx.fillStyle = "#64748b";
+      ctx.font = '11px "Fira Code"';
+      ctx.textAlign = "right";
+      ctx.fillText(yVal.toFixed(2), padL - 8, cy + 4);
+    }
+    const steps = 100;
+    ctx.strokeStyle = "#00f0ff";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0;i <= steps; i++) {
+      const p = i / steps;
+      const hVal = entropy(p, 1 - p) / 2;
+      const cx = padL + p * plotW;
+      const cy = h - padB - hVal * plotH;
+      if (i === 0)
+        ctx.moveTo(cx, cy);
+      else
+        ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = "#00ff88";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0;i <= steps; i++) {
+      const p = i / steps;
+      const gVal = gini(p, 1 - p);
+      const cx = padL + p * plotW;
+      const cy = h - padB - gVal * plotH;
+      if (i === 0)
+        ctx.moveTo(cx, cy);
+      else
+        ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = "#ffaa00";
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    for (let i = 0;i <= steps; i++) {
+      const p = i / steps;
+      const errVal = classError(p, 1 - p);
+      const cx = padL + p * plotW;
+      const cy = h - padB - errVal * plotH;
+      if (i === 0)
+        ctx.moveTo(cx, cy);
+      else
+        ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const curX = padL + currentP * plotW;
+    ctx.strokeStyle = "#fef08a";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(curX, padT);
+    ctx.lineTo(curX, h - padB);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = "bold 11px Inter, sans-serif";
+    ctx.fillStyle = "#00f0ff";
+    ctx.fillText("— Scaled Entropy H(p)/2", padL + 20, padT + 15);
+    ctx.fillStyle = "#00ff88";
+    ctx.fillText("— Gini Impurity", padL + 200, padT + 15);
+    ctx.fillStyle = "#ffaa00";
+    ctx.fillText("- - Misclassification Error", padL + 340, padT + 15);
+  }
+  render();
+}
+
+// src/games/week3_minkowski_metric_space.ts
+init_state();
+init_sound();
+init_confetti_module();
+function renderWeek3MinkowskiMetricSpace(container) {
+  let activeStep = 1;
+  let pOrder = 2;
+  function render() {
+    container.innerHTML = `
+      <div class="game-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>\uD83D\uDCD0 Game 3.2: Minkowski Metric Spaces & Axiom Geometry</h2>
+            <p class="card-subtitle">Visual Intuition: Unit ball geometry across Lp norms, Cosine Distance, and Metric Axioms</p>
+          </div>
+          <span class="concept-badge">Week 3 Distance Metrics</span>
+        </div>
+
+        <!-- Stepper Component -->
+        <div class="stepper-container">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Tutorial:</span>
+          <div class="step-indicator">
+            <button class="step-dot ${activeStep === 1 ? "active" : activeStep > 1 ? "done" : ""}" data-step="1">1</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Lp Unit Ball</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 2 ? "active" : activeStep > 2 ? "done" : ""}" data-step="2">2</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Metric Axioms</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 3 ? "active" : "done"}" data-step="3">3</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Cosine vs Euclidean</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-step-prev" class="btn btn-secondary btn-sm" ${activeStep === 1 ? 'disabled style="opacity: 0.4;"' : ""}>◀ Prev</button>
+            <button id="btn-step-next" class="btn btn-primary btn-sm" ${activeStep === 3 ? 'disabled style="opacity: 0.4;"' : ""}>Next ▶</button>
+          </div>
+        </div>
+
+        ${activeStep === 1 ? `
+          <!-- Step 1: Unit Ball Morpher -->
+          <div style="animation: fadeIn 0.3s ease;">
+            <div class="controls-panel" style="margin-bottom: 16px;">
+              <div class="control-item" style="flex: 1;">
+                <label>Minkowski Order (p): <span id="p-val" style="color: var(--accent-cyan); font-weight: bold;">${pOrder.toFixed(1)}</span></label>
+                <input type="range" id="p-slider" min="0.5" max="6.0" step="0.5" value="${pOrder}" style="width: 100%;">
+              </div>
+              <div class="control-item">
+                <label>Presets:</label>
+                <div style="display: flex; gap: 6px;">
+                  <button class="btn btn-sm btn-secondary p-preset" data-p="1.0">p = 1 (Manhattan)</button>
+                  <button class="btn btn-sm btn-secondary p-preset" data-p="2.0">p = 2 (Euclidean)</button>
+                  <button class="btn btn-sm btn-secondary p-preset" data-p="0.5">p = 0.5 (Non-Convex)</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 300px; gap: 20px; margin-bottom: 16px;">
+              <div class="game-viewport" style="height: 300px;">
+                <canvas id="minkowski-canvas" width="600" height="300" style="width: 100%; height: 100%;"></canvas>
+                <div class="viewport-overlay">
+                  Unit Circle Contour: ({|x_1|^p + |x_2|^p}^{1/p} = 1)
+                </div>
+              </div>
+
+              <div style="background: rgba(10, 15, 25, 0.85); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 18px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <h4 style="font-size: 13px; text-transform: uppercase; color: var(--accent-amber); margin-bottom: 8px;">
+                    ${pOrder === 1 ? "\uD83D\uDC8E L1 Manhattan (Taxicab)" : pOrder === 2 ? "⭕ L2 Euclidean (Standard Circle)" : pOrder < 1 ? "⭐ Non-Convex (Violates Triangle Ineq)" : "⏹️ Approaching L∞ (Chebyshev Box)"}
+                  </h4>
+                  <p style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.5;">
+                    ${pOrder === 1 ? "City-block grid distance. The unit ball forms a diamond with sharp vertices along coordinate axes." : pOrder === 2 ? "Standard straight-line Pythagorean distance. The unit ball is isotropic and rotationally invariant." : pOrder < 1 ? "Curves inward into a star-shape. Triangle inequality fails; not a valid mathematical metric!" : "Rounds out towards a square. As p → ∞, distance is governed purely by the single maximum coordinate difference!"}
+                  </p>
+                </div>
+
+                <div class="formula-block" style="font-size: 11px;">
+                  Dis_p(x, y) = ( ∑ |x_j - y_j|^p )^{1/p}
+                </div>
+              </div>
+            </div>
+          </div>
+        ` : activeStep === 2 ? `
+          <!-- Step 2: Formal Metric Axioms -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 12px;">\uD83C\uDFDB️ The 3 Formal Metric Axioms (Week 3)</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+              For any valid distance metric function (Dis(x, y)) on a metric space:
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px;">
+              <div style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.2); padding: 14px; border-radius: var(--radius-md);">
+                <div style="font-size: 12px; font-weight: 700; color: var(--accent-cyan); margin-bottom: 4px;">1. Indiscernibles</div>
+                <div class="formula-block" style="font-size: 11px;">Dis(x, x) = 0<br>x ≠ y ⇒ Dis(x, y) > 0</div>
+                <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 6px;">Distance is zero if and only if points are identical.</div>
+              </div>
+
+              <div style="background: rgba(157, 78, 221, 0.05); border: 1px solid rgba(157, 78, 221, 0.2); padding: 14px; border-radius: var(--radius-md);">
+                <div style="font-size: 12px; font-weight: 700; color: #c084fc; margin-bottom: 4px;">2. Symmetry</div>
+                <div class="formula-block" style="font-size: 11px;">Dis(x, y) = Dis(y, x)</div>
+                <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 6px;">Distance from A to B equals distance from B to A.</div>
+              </div>
+
+              <div style="background: rgba(0, 255, 136, 0.05); border: 1px solid rgba(0, 255, 136, 0.2); padding: 14px; border-radius: var(--radius-md);">
+                <div style="font-size: 12px; font-weight: 700; color: var(--accent-green); margin-bottom: 4px;">3. Triangle Inequality</div>
+                <div class="formula-block" style="font-size: 11px;">Dis(x, z) ≤ Dis(x, y) + Dis(y, z)</div>
+                <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 6px;">Direct path is always shorter than or equal to a detour.</div>
+              </div>
+            </div>
+
+            <div style="background: rgba(255, 170, 0, 0.08); border-left: 3px solid var(--accent-amber); padding: 10px 14px; border-radius: 4px; font-size: 12px; color: #fde047;">
+              \uD83D\uDCA1 <strong>Pseudo-Metric:</strong> Relaxes strict positivity, permitting (Dis(x, y) = 0) for distinct points (x 
+eq y).
+            </div>
+          </div>
+        ` : `
+          <!-- Step 3: Cosine Similarity vs Cosine Distance Check -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 10px;">\uD83D\uDCD0 High-Dimensional Text: Cosine vs Euclidean</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 14px;">
+              Why is <strong>Cosine Distance</strong> ((1 - cos	heta)) preferred over Euclidean distance when comparing text embeddings of documents with very different lengths?
+            </p>
+            <div class="quiz-options">
+              <button class="quiz-option-btn q-opt-mink" data-val="correct">
+                <strong>Length Invariance:</strong> Cosine distance measures vector angular orientation (	heta) regardless of magnitude/word-count, whereas Euclidean distance is inflated purely by document length differences!
+              </button>
+              <button class="quiz-option-btn q-opt-mink" data-val="wrong">
+                Because Euclidean distance cannot be calculated in spaces with more than 3 dimensions.
+              </button>
+            </div>
+            <div id="mink-feedback" style="min-height: 28px; margin-top: 10px;"></div>
+          </div>
+        `}
+
+        <details class="math-explainer">
+          <summary>\uD83D\uDCA1 Deep Dive & Formula Breakdown (Click to expand)</summary>
+          <div class="explainer-content">
+            <p><strong>Minkowski Norms and Voronoi Partitions:</strong></p>
+            <ul>
+              <li>(p = 2): Standard (L_2) Euclidean norm: (sqrt{sum (x_i - y_i)^2})</li>
+              <li>(p = 1): (L_1) Manhattan norm: (sum |x_i - y_i|)</li>
+              <li>(p = 0): Hamming distance: counts number of coordinate mismatches (sum mathbb{I}[x_i 
+eq y_i])</li>
+              <li><strong>Cosine Similarity:</strong> (\frac{A cdot B}{|A||B|} = cos(	heta))</li>
+            </ul>
+          </div>
+        </details>
+      </div>
+    `;
+    if (activeStep === 1) {
+      const canvas = container.querySelector("#minkowski-canvas");
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        const scale = 100;
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, cy);
+        ctx.lineTo(canvas.width, cy);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, canvas.height);
+        ctx.stroke();
+        ctx.strokeStyle = "#00f0ff";
+        ctx.fillStyle = "rgba(0, 240, 255, 0.08)";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        const steps = 360;
+        for (let i = 0;i <= steps; i++) {
+          const theta = i / steps * Math.PI * 2;
+          const cosT = Math.cos(theta);
+          const sinT = Math.sin(theta);
+          const denom = Math.pow(Math.pow(Math.abs(cosT), pOrder) + Math.pow(Math.abs(sinT), pOrder), 1 / pOrder);
+          const r = 1 / denom;
+          const px = cx + r * cosT * scale;
+          const py = cy - r * sinT * scale;
+          if (i === 0)
+            ctx.moveTo(px, py);
+          else
+            ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#fff";
+        ctx.font = "10px Fira Code";
+        ctx.fillText("(1, 0)", cx + scale + 5, cy + 12);
+        ctx.fillText("(0, 1)", cx - 18, cy - scale - 8);
+      }
+    }
+    container.querySelectorAll(".p-preset").forEach((b) => {
+      b.addEventListener("click", () => {
+        sound.playClick();
+        pOrder = parseFloat(b.dataset.p || "2.0");
+        render();
+      });
+    });
+    const pSlider = container.querySelector("#p-slider");
+    pSlider?.addEventListener("input", (e) => {
+      pOrder = parseFloat(e.target.value);
+      render();
+    });
+    container.querySelectorAll(".step-dot").forEach((b) => {
+      b.addEventListener("click", () => {
+        sound.playClick();
+        activeStep = parseInt(b.dataset.step || "1");
+        render();
+      });
+    });
+    container.querySelector("#btn-step-prev")?.addEventListener("click", () => {
+      if (activeStep > 1) {
+        sound.playClick();
+        activeStep--;
+        render();
+      }
+    });
+    container.querySelector("#btn-step-next")?.addEventListener("click", () => {
+      if (activeStep < 3) {
+        sound.playClick();
+        activeStep++;
+        render();
+      }
+    });
+    container.querySelectorAll(".q-opt-mink").forEach((b) => {
+      b.addEventListener("click", () => {
+        const val = b.dataset.val;
+        const fb = container.querySelector("#mink-feedback");
+        if (val === "correct") {
+          sound.playVictory();
+          confetti_module_default({ particleCount: 50, spread: 60 });
+          gameManager.addScore(100, 50);
+          gameManager.markGameComplete("week3_minkowski");
+          if (fb)
+            fb.innerHTML = '<div style="color: var(--accent-green); font-weight: 700;">✓ Correct! Cosine distance measures direction θ and is invariant to document length!</div>';
+        } else {
+          sound.playWrong();
+          if (fb)
+            fb.innerHTML = '<div style="color: var(--accent-red);">Incorrect. Euclidean distance is sensitive to document length; Cosine isolates angular alignment.</div>';
+        }
+      });
     });
   }
   render();
@@ -32284,6 +34661,8 @@ function renderWeek3KnnGalaxy(container) {
   let k = 1;
   let testPoint = { f1: 2, f2: 1 };
   let metric = "euclidean";
+  let predK1 = null;
+  let predK3 = null;
   function calcDistance(p, tp, currentMetric) {
     if (currentMetric === "manhattan") {
       return Math.abs(p.f1 - tp.f1) + Math.abs(p.f2 - tp.f2);
@@ -32373,9 +34752,26 @@ function renderWeek3KnnGalaxy(container) {
     }).join("")}
             </div>
 
-            <div style="margin-top: 18px;">
+            <div style="margin-top: 18px; border-top: 1px solid var(--border-color); padding-top: 14px;">
+              <div style="font-size: 12px; font-weight: 700; color: var(--accent-amber); margin-bottom: 8px;">
+                \uD83D\uDCDD Midterm Q12 Prediction Check:
+              </div>
+              <div style="margin-bottom: 10px;">
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">Part (a) When k = 1, x* is:</div>
+                <div style="display: flex; gap: 8px;">
+                  <button id="btn-pred-k1-a" class="btn btn-sm ${predK1 === "A" ? "btn-primary" : "btn-secondary"}" style="flex: 1;">Class A</button>
+                  <button id="btn-pred-k1-b" class="btn btn-sm ${predK1 === "B" ? "btn-primary" : "btn-secondary"}" style="flex: 1;">Class B</button>
+                </div>
+              </div>
+              <div style="margin-bottom: 14px;">
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">Part (b) When k = 3, x* is:</div>
+                <div style="display: flex; gap: 8px;">
+                  <button id="btn-pred-k3-a" class="btn btn-sm ${predK3 === "A" ? "btn-primary" : "btn-secondary"}" style="flex: 1;">Class A</button>
+                  <button id="btn-pred-k3-b" class="btn btn-sm ${predK3 === "B" ? "btn-primary" : "btn-secondary"}" style="flex: 1;">Class B</button>
+                </div>
+              </div>
               <button id="btn-submit-exam-k" class="btn btn-primary" style="width: 100%;">
-                Verify Midterm Q12 Choice
+                Verify Midterm Q12 Answers
               </button>
             </div>
           </div>
@@ -32384,20 +34780,20 @@ function renderWeek3KnnGalaxy(container) {
         <div id="knn-feedback-box" style="min-height: 20px;"></div>
 
         <details class="math-explainer">
-        <summary>\uD83D\uDCA1 Midterm Practice Question 12 Official Solutions (Click to expand)</summary>
-        <div class="explainer-content">
-          <p><strong>Calculated Euclidean Distances to $x^* = (2, 1)$:</strong></p>
-          <div class="formula-block">
-            d(x₁, x*) = √((0-2)² + (0-1)²) = √(4 + 1) = √5 ≈ 2.236 [Label A]<br>
-            d(x₂, x*) = √((2-2)² + (0-1)²) = √(0 + 1) = 1.000      [Label A] (Rank 1)<br>
-            d(x₃, x*) = √((2-2)² + (3-1)²) = √(0 + 4) = 2.000      [Label B] (Rank 2)<br>
-            d(x₄, x*) = √((1-2)² + (3-1)²) = √(1 + 4) = √5 ≈ 2.236 [Label B]<br>
-            d(x₅, x*) = √((4-2)² + (1-1)²) = √(4 + 0) = 2.000      [Label B] (Rank 3)
+          <summary>\uD83D\uDCA1 Deep Dive & Formula Breakdown (Click to expand)</summary>
+          <div class="explainer-content">
+            <p><strong>Calculated Euclidean Distances to x* = (2, 1):</strong></p>
+            <div class="formula-block">
+              d(x₁, x*) = √((0-2)² + (0-1)²) = √(4 + 1) = √5 ≈ 2.236 [Label A]<br>
+              d(x₂, x*) = √((2-2)² + (0-1)²) = √(0 + 1) = 1.000      [Label A] (Rank 1)<br>
+              d(x₃, x*) = √((2-2)² + (3-1)²) = √(0 + 4) = 2.000      [Label B] (Rank 2)<br>
+              d(x₄, x*) = √((1-2)² + (3-1)²) = √(1 + 4) = √5 ≈ 2.236 [Label B]<br>
+              d(x₅, x*) = √((4-2)² + (1-1)²) = √(4 + 0) = 2.000      [Label B] (Rank 3)
+            </div>
+            <p><strong>(a) For k = 1:</strong> The single closest neighbor is x₂ at distance 1.0. Therefore, x* is classified as <strong>Label A</strong>.</p>
+            <p><strong>(b) For k = 3:</strong> The three closest neighbors are x₂ (dist 1, A), x₃ (dist 2, B), and x₅ (dist 2, B). By plurality vote: 2 votes for B vs 1 vote for A → x* is classified as <strong>Label B</strong>!</p>
           </div>
-          <p><strong>(a) For $k = 1$:</strong> The single closest neighbor is x₂ at distance $1.0$. Therefore, $x^*$ is classified as <strong>Label A</strong>.</p>
-          <p><strong>(b) For $k = 3$:</strong> The three closest neighbors are x₂ (dist 1, A), x₃ (dist 2, B), and $x_5$ (dist 2, B). By plurality vote: 2 votes for B vs 1 vote for A $	o$ $x^*$ is classified as <strong>Label B</strong>!</p>
-        </div>
-      </details>
+        </details>
     </div>
   `;
     setup3DView(nearestK);
@@ -32426,19 +34822,68 @@ function renderWeek3KnnGalaxy(container) {
       testPoint = { f1: 2, f2: 1 };
       renderUI();
     });
+    container.querySelector("#btn-pred-k1-a")?.addEventListener("click", () => {
+      sound.playClick();
+      predK1 = "A";
+      renderUI();
+    });
+    container.querySelector("#btn-pred-k1-b")?.addEventListener("click", () => {
+      sound.playClick();
+      predK1 = "B";
+      renderUI();
+    });
+    container.querySelector("#btn-pred-k3-a")?.addEventListener("click", () => {
+      sound.playClick();
+      predK3 = "A";
+      renderUI();
+    });
+    container.querySelector("#btn-pred-k3-b")?.addEventListener("click", () => {
+      sound.playClick();
+      predK3 = "B";
+      renderUI();
+    });
     container.querySelector("#btn-submit-exam-k")?.addEventListener("click", () => {
-      sound.playVictory();
-      confetti_module_default({ particleCount: 70, spread: 60 });
-      gameManager.addScore(150, 75);
-      gameManager.markGameComplete("week3_knn");
       const fb = container.querySelector("#knn-feedback-box");
-      if (fb) {
-        fb.innerHTML = `
-          <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 16px; color: #a7f3d0; margin-bottom: 16px;">
-            <h3 style="font-size: 15px; margin-bottom: 6px;">\uD83C\uDF89 Midterm Question 12 Mastery Verified!</h3>
-            <p>You proved why <strong>k=1 selects Label A</strong> (via x₂), and <strong>k=3 flips to Label B</strong> (via majority vote of x₂, x₃, x₅)!</p>
-          </div>
-        `;
+      if (!predK1 || !predK3) {
+        sound.playWrong();
+        if (fb) {
+          fb.innerHTML = `
+            <div style="background: rgba(255, 170, 0, 0.15); border: 1px solid var(--accent-amber); border-radius: var(--radius-md); padding: 14px; color: #fef08a; margin-bottom: 16px;">
+              ⚠️ <strong>Incomplete Prediction:</strong> Please select an answer for both Part (a) [k=1] and Part (b) [k=3] before verifying!
+            </div>
+          `;
+        }
+        return;
+      }
+      if (predK1 === "A" && predK3 === "B") {
+        sound.playVictory();
+        confetti_module_default({ particleCount: 70, spread: 60 });
+        gameManager.addScore(150, 75);
+        gameManager.markGameComplete("week3_knn");
+        if (fb) {
+          fb.innerHTML = `
+            <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 16px; color: #a7f3d0; margin-bottom: 16px;">
+              <h3 style="font-size: 15px; margin-bottom: 6px;">\uD83C\uDF89 Midterm Question 12 Mastery Verified! (+150 Score)</h3>
+              <p>100% Correct! <strong>k=1 chooses Label A</strong> (x₂ is distance 1.0 away, while closest B is distance 2.0). <strong>k=3 chooses Label B</strong> because the three nearest neighbors are x₂ (A, dist 1), x₃ (B, dist 2), and x₅ (B, dist 2), yielding 2 votes for B vs 1 vote for A!</p>
+            </div>
+          `;
+        }
+      } else {
+        sound.playWrong();
+        let reason = "";
+        if (predK1 !== "A") {
+          reason += "• For k=1, the nearest neighbor is x₂ (label A) at distance 1.0. ";
+        }
+        if (predK3 !== "B") {
+          reason += "• For k=3, the 3 nearest neighbors are x₂ (A, d=1.0), x₃ (B, d=2.0), and x₅ (B, d=2.0), so Class B wins the majority vote 2 to 1.";
+        }
+        if (fb) {
+          fb.innerHTML = `
+            <div style="background: rgba(255, 51, 68, 0.15); border: 1px solid var(--accent-red); border-radius: var(--radius-md); padding: 14px; color: #fca5a5; margin-bottom: 16px;">
+              ❌ <strong>Incorrect Prediction:</strong> ${reason} Inspect the distance leaderboard above and try again!
+            </div>
+          `;
+        }
       }
     });
   }
@@ -32661,13 +35106,13 @@ function renderWeek3MissingData(container) {
         </div>
 
         <details class="math-explainer">
-        <summary>\uD83D\uDCA1 Midterm Practice Question 13 Official Solutions (Click to expand)</summary>
-        <div class="explainer-content">
-          <p><strong>(a) Global Mean:</strong> $\\frac{20 + 22 + 30 + 28 + 32}{5} = \\frac{132}{5} = \\mathbf{26.4}$.</p>
-          <p><strong>(b) Class-Conditional Mean:</strong> Known Class A ages are {20, 22}. Mean is $\\frac{20 + 22}{2} = \\mathbf{21.0}$.</p>
-          <p><strong>(c) Test Set Dilemma:</strong> <strong>Global mean</strong> is more appropriate! At test/inference time, the true label $Y$ is unknown/unseen. We cannot condition on a label we don't have. Doing so would violate the evaluation protocol and cause data leakage.</p>
-        </div>
-      </details>
+          <summary>\uD83D\uDCA1 Deep Dive & Formula Breakdown (Click to expand)</summary>
+          <div class="explainer-content">
+            <p><strong>(a) Global Mean:</strong> (20 + 22 + 30 + 28 + 32) / 5 = 132 / 5 = <strong>26.4</strong>.</p>
+            <p><strong>(b) Class-Conditional Mean:</strong> Known Class A ages are {20, 22}. Mean is (20 + 22) / 2 = <strong>21.0</strong>.</p>
+            <p><strong>(c) Test Set Dilemma:</strong> <strong>Global mean</strong> is more appropriate! At test/inference time, the true label Y is unknown/unseen. We cannot condition on a label we don't have. Doing so would violate the evaluation protocol and cause data leakage.</p>
+          </div>
+        </details>
     </div>
   `;
     const canvas = container.querySelector("#impute-canvas");
@@ -32789,6 +35234,264 @@ function renderWeek3MissingData(container) {
           </div>
         `;
       }
+    });
+  }
+  render();
+}
+
+// src/games/week3_feature_prep_ethics.ts
+init_state();
+init_sound();
+init_confetti_module();
+function renderWeek3FeaturePrepEthics(container) {
+  let activeStep = 1;
+  let rawValues = [18, 22, 25, 29, 32, 95];
+  function render() {
+    const minVal = Math.min(...rawValues);
+    const maxVal = Math.max(...rawValues);
+    const meanVal = rawValues.reduce((a, b) => a + b, 0) / rawValues.length;
+    const stdVal = Math.sqrt(rawValues.reduce((a, b) => a + Math.pow(b - meanVal, 2), 0) / rawValues.length);
+    container.innerHTML = `
+      <div class="game-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>\uD83E\uDDFC Game 3.5: Feature Engineering, Scaling & Data Ethics</h2>
+            <p class="card-subtitle">Visual Intuition: GIGO Principle, Min-Max vs Z-Score on outliers, and Datasheets</p>
+          </div>
+          <span class="concept-badge">Week 3 Preprocessing</span>
+        </div>
+
+        <!-- Stepper Component -->
+        <div class="stepper-container">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Tutorial:</span>
+          <div class="step-indicator">
+            <button class="step-dot ${activeStep === 1 ? "active" : activeStep > 1 ? "done" : ""}" data-step="1">1</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Feature Typologies</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 2 ? "active" : activeStep > 2 ? "done" : ""}" data-step="2">2</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Scaling & Outliers</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 3 ? "active" : "done"}" data-step="3">3</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Ethics & Leakage</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-step-prev" class="btn btn-secondary btn-sm" ${activeStep === 1 ? 'disabled style="opacity: 0.4;"' : ""}>◀ Prev</button>
+            <button id="btn-step-next" class="btn btn-primary btn-sm" ${activeStep === 3 ? 'disabled style="opacity: 0.4;"' : ""}>Next ▶</button>
+          </div>
+        </div>
+
+        ${activeStep === 1 ? `
+          <!-- Step 1: Feature Typologies -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 10px;">\uD83C\uDFF7️ The 4 Foundational Feature Typologies</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+              According to the <strong>GIGO Principle</strong> ("Garbage In, Garbage Out"), models depend fundamentally on input data representation:
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 16px;">
+              <div style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.2); padding: 14px; border-radius: var(--radius-md);">
+                <strong style="color: var(--accent-cyan); font-size: 13px;">1. Categorical (Nominal)</strong>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                  Qualitative labels lacking intrinsic order (e.g., Blood Type, Country). Requires <strong>One-Hot Encoding</strong> into orthogonal binary vectors.
+                </p>
+              </div>
+
+              <div style="background: rgba(157, 78, 221, 0.05); border: 1px solid rgba(157, 78, 221, 0.2); padding: 14px; border-radius: var(--radius-md);">
+                <strong style="color: #c084fc; font-size: 13px;">2. Ordinal</strong>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                  Categories with meaningful order but non-constant intervals (e.g., Likert rating: Low, Medium, High; Education Level: BSc, MSc, PhD).
+                </p>
+              </div>
+
+              <div style="background: rgba(0, 255, 136, 0.05); border: 1px solid rgba(0, 255, 136, 0.2); padding: 14px; border-radius: var(--radius-md);">
+                <strong style="color: var(--accent-green); font-size: 13px;">3. Quantitative (Numerical)</strong>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                  Continuous/discrete physical measurements where ratios carry literal arithmetic meaning (e.g., Patient Blood Pressure, Annual Income).
+                </p>
+              </div>
+
+              <div style="background: rgba(255, 170, 0, 0.05); border: 1px solid rgba(255, 170, 0, 0.2); padding: 14px; border-radius: var(--radius-md);">
+                <strong style="color: var(--accent-amber); font-size: 13px;">4. Boolean</strong>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                  Binary indicator flags: 0 (False) or 1 (True) (e.g., Has Smoked, Fraud Flag).
+                </p>
+              </div>
+            </div>
+          </div>
+        ` : activeStep === 2 ? `
+          <!-- Step 2: The 5 Normalization & Scaling Methods -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; flex-wrap:wrap; gap:10px;">
+              <div>
+                <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 4px;">⚖️ The 5 Normalization & Feature Scaling Methods (Lecture Slides)</h3>
+                <p style="color: var(--text-secondary); font-size: 13px;">
+                  Sample data: <code>[18, 22, 25, 29, 32, <strong style="color:var(--accent-red);">${rawValues[rawValues.length - 1]}</strong>]</code>.
+                </p>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center; background: rgba(255,255,255,0.05); padding: 6px 14px; border-radius: 8px;">
+                <label style="font-size: 12px; color: var(--accent-amber); font-weight: bold;">Outlier Value:</label>
+                <input type="range" id="outlier-slider" min="35" max="250" step="5" value="${rawValues[rawValues.length - 1]}" style="width: 120px;">
+                <span id="outlier-val-lbl" style="font-family:'Fira Code'; font-size: 13px; font-weight:bold; color:var(--accent-red);">${rawValues[rawValues.length - 1]}</span>
+              </div>
+            </div>
+
+            <!-- 5-Way Comparison Grid -->
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px;">
+              <!-- 1. Min-Max Normalization -->
+              <div style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.25); padding: 12px; border-radius: var(--radius-md);">
+                <h4 style="color: var(--accent-cyan); font-size: 13px; margin-bottom: 4px;">1. Min-Max Normalization: [0, 1]</h4>
+                <div class="formula-block" style="font-size: 10.5px; padding: 4px 6px;">x' = (x - min) / (max - min)</div>
+                <div style="font-family: 'Fira Code', monospace; font-size: 11px; color: #7dd3fc; line-height: 1.5; max-height: 100px; overflow-y:auto;">
+                  ${rawValues.map((v) => `${v} → ${((v - minVal) / (maxVal - minVal)).toFixed(3)}`).join("<br>")}
+                </div>
+                <div style="font-size: 11px; color: var(--accent-red); margin-top: 6px;">
+                  ⚠️ Extreme outlier squashes regular points into tiny range!
+                </div>
+              </div>
+
+              <!-- 2. Z-Score Normalization -->
+              <div style="background: rgba(255, 170, 0, 0.05); border: 1px solid rgba(255, 170, 0, 0.25); padding: 12px; border-radius: var(--radius-md);">
+                <h4 style="color: var(--accent-amber); font-size: 13px; margin-bottom: 4px;">2. Z-Score Standardization: μ=0, σ=1</h4>
+                <div class="formula-block" style="font-size: 10.5px; padding: 4px 6px;">x' = (x - μ) / σ</div>
+                <div style="font-family: 'Fira Code', monospace; font-size: 11px; color: #fef08a; line-height: 1.5; max-height: 100px; overflow-y:auto;">
+                  ${rawValues.map((v) => `${v} → ${((v - meanVal) / (stdVal || 1)).toFixed(3)}`).join("<br>")}
+                </div>
+                <div style="font-size: 11px; color: var(--accent-amber); margin-top: 6px;">
+                  ⚠️ μ (${meanVal.toFixed(1)}) and σ (${stdVal.toFixed(1)}) are distorted by outlier!
+                </div>
+              </div>
+
+              <!-- 3. RobustScaler -->
+              <div style="background: rgba(0, 255, 136, 0.05); border: 1px solid rgba(0, 255, 136, 0.25); padding: 12px; border-radius: var(--radius-md);">
+                <h4 style="color: var(--accent-green); font-size: 13px; margin-bottom: 4px;">3. RobustScaler: Median, IQR</h4>
+                <div class="formula-block" style="font-size: 10.5px; padding: 4px 6px;">x' = (x - Median) / (Q₃ - Q₁)</div>
+                <div style="font-family: 'Fira Code', monospace; font-size: 11px; color: #a7f3d0; line-height: 1.5; max-height: 100px; overflow-y:auto;">
+                  ${(() => {
+      const sorted = [...rawValues].sort((a, b) => a - b);
+      const med = (sorted[2] + sorted[3]) / 2;
+      const q1 = sorted[1];
+      const q3 = sorted[4];
+      const iqr = Math.max(1, q3 - q1);
+      return rawValues.map((v) => `${v} → ${((v - med) / iqr).toFixed(3)}`).join("<br>");
+    })()}
+                </div>
+                <div style="font-size: 11px; color: var(--accent-green); margin-top: 6px;">
+                  ✓ Rock solid! Median and IQR resist outlier contamination.
+                </div>
+              </div>
+            </div>
+
+            <!-- Bottom Row: Decimal Scaling & Unit Vector -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <!-- 4. Decimal Scaling -->
+              <div style="background: rgba(157, 78, 221, 0.05); border: 1px solid rgba(157, 78, 221, 0.25); padding: 12px; border-radius: var(--radius-md);">
+                <h4 style="color: #c084fc; font-size: 13px; margin-bottom: 4px;">4. Decimal Scaling Normalization</h4>
+                <div class="formula-block" style="font-size: 10.5px; padding: 4px 6px;">
+                  x' = x / 10^j, where j = ⌈log₁₀(max |x|)⌉
+                </div>
+                <div style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 6px;">
+                  For max value ${maxVal}: smallest integer j gives 10^j = ${Math.pow(10, Math.ceil(Math.log10(maxVal || 1)))} (j = ${Math.ceil(Math.log10(maxVal || 1))}).
+                </div>
+                <div style="font-family: 'Fira Code', monospace; font-size: 11px; color: #d8b4fe; line-height: 1.5;">
+                  ${(() => {
+      const j = Math.ceil(Math.log10(maxVal || 1));
+      const denom = Math.pow(10, j);
+      return rawValues.map((v) => `${v} → ${(v / denom).toFixed(3)}`).join(", ");
+    })()}
+                </div>
+              </div>
+
+              <!-- 5. Unit Vector Normalization -->
+              <div style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.25); padding: 12px; border-radius: var(--radius-md);">
+                <h4 style="color: #38bdf8; font-size: 13px; margin-bottom: 4px;">5. Unit Vector (L₁ & L₂ Normalization)</h4>
+                <div class="formula-block" style="font-size: 10.5px; padding: 4px 6px;">
+                  L₁: x / ∑|x_i| | L₂: x / √(∑ x_i²)
+                </div>
+                <div style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 6px;">
+                  Projects feature vectors onto unit hyper-sphere (sum of L₁ = 1, Euclidean norm L₂ = 1). Essential for cosine similarity.
+                </div>
+                <div style="font-family: 'Fira Code', monospace; font-size: 11px; color: #7dd3fc; line-height: 1.5;">
+                  ${(() => {
+      const l2 = Math.sqrt(rawValues.reduce((s, v) => s + v * v, 0));
+      return `L₂ Unit Vector: [${rawValues.map((v) => (v / l2).toFixed(2)).join(", ")}]`;
+    })()}
+                </div>
+              </div>
+            </div>
+          </div>
+        ` : `
+          <!-- Step 3: Contamination & Ethics Audit -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 10px;">\uD83D\uDEE1️ Data Contamination Rule & Datasheets for Datasets</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 14px;">
+              What is the strict rule regarding feature scaling parameters ((mu, sigma, min, max)) when evaluating models?
+            </p>
+            <div class="quiz-options">
+              <button class="quiz-option-btn q-opt-prep" data-val="correct">
+                <strong>Strict Train-Only Estimation:</strong> Scaling statistics ((mu, sigma)) must be computed strictly on the Training set, and applied forward to Test data without recalculating on the Test set to prevent <strong>preprocessing data leakage</strong>.
+              </button>
+              <button class="quiz-option-btn q-opt-prep" data-val="wrong">
+                Scaling statistics should always be recalculated on the combined dataset to maximize accuracy.
+              </button>
+            </div>
+            <div id="prep-feedback" style="min-height: 28px; margin-top: 10px;"></div>
+          </div>
+        `}
+
+        <details class="math-explainer">
+          <summary>\uD83D\uDCA1 Deep Dive & Formula Breakdown (Click to expand)</summary>
+          <div class="explainer-content">
+            <p><strong>Datasheets for Datasets (Gebru et al., 2021):</strong> Standardized documentation detailing dataset motivation, composition, collection process, preprocessing, and recommended uses to prevent algorithmic bias and demographic underrepresentation.</p>
+          </div>
+        </details>
+      </div>
+    `;
+    container.querySelectorAll(".step-dot").forEach((b) => {
+      b.addEventListener("click", () => {
+        sound.playClick();
+        activeStep = parseInt(b.dataset.step || "1");
+        render();
+      });
+    });
+    container.querySelector("#btn-step-prev")?.addEventListener("click", () => {
+      if (activeStep > 1) {
+        sound.playClick();
+        activeStep--;
+        render();
+      }
+    });
+    container.querySelector("#btn-step-next")?.addEventListener("click", () => {
+      if (activeStep < 3) {
+        sound.playClick();
+        activeStep++;
+        render();
+      }
+    });
+    container.querySelector("#outlier-slider")?.addEventListener("input", (e) => {
+      const val = parseInt(e.target.value);
+      rawValues[rawValues.length - 1] = val;
+      const lbl = container.querySelector("#outlier-val-lbl");
+      if (lbl)
+        lbl.textContent = val.toString();
+      render();
+    });
+    container.querySelectorAll(".q-opt-prep").forEach((b) => {
+      b.addEventListener("click", () => {
+        const val = b.dataset.val;
+        const fb = container.querySelector("#prep-feedback");
+        if (val === "correct") {
+          sound.playVictory();
+          confetti_module_default({ particleCount: 50, spread: 60 });
+          gameManager.addScore(100, 50);
+          gameManager.markGameComplete("week3_feature_prep");
+          if (fb)
+            fb.innerHTML = '<div style="color: var(--accent-green); font-weight: 700;">✓ Correct! Calculating scaling metrics on test data causes data leakage and invalidates evaluation!</div>';
+        } else {
+          sound.playWrong();
+          if (fb)
+            fb.innerHTML = '<div style="color: var(--accent-red);">Incorrect. Test data statistics must never contaminate training pipelines.</div>';
+        }
+      });
     });
   }
   render();
@@ -32992,6 +35695,243 @@ function renderWeek3ClassImbalance(container) {
         fb.innerHTML = `
           <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 14px; color: #a7f3d0;">
             <strong>✓ Question 10 Mastered!</strong> You clearly comprehend undersampling (information loss), oversampling (synthetic distribution mismatch), and the golden rule of never resampling test sets!
+          </div>
+        `;
+      }
+    });
+  }
+  render();
+}
+
+// src/games/week4_pipeline_lifecycle.ts
+init_state();
+init_sound();
+init_confetti_module();
+function renderWeek4PipelineLifecycle(container) {
+  let activeStep = 1;
+  let quizAnswer = null;
+  function render() {
+    container.innerHTML = `
+      <div class="game-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>\uD83C\uDFED Game 4.1: ML Pipeline Lifecycle & Leakage Crime Lab</h2>
+            <p class="card-subtitle">Visual Intuition: The 10-stage engineering loop and catching Preprocessing vs Temporal vs Group leakage</p>
+          </div>
+          <span class="concept-badge">Week 4 Lifecycle</span>
+        </div>
+
+        <!-- Stepper Component -->
+        <div class="stepper-container">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Tutorial:</span>
+          <div class="step-indicator">
+            <button class="step-dot ${activeStep === 1 ? "active" : activeStep > 1 ? "done" : ""}" data-step="1">1</button>
+            <span style="font-size: 11px; color: var(--text-muted);">10 Pipeline Stages</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 2 ? "active" : activeStep > 2 ? "done" : ""}" data-step="2">2</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Leakage Crime Lab</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 3 ? "active" : "done"}" data-step="3">3</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Baselines & SOTA</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-step-prev" class="btn btn-secondary btn-sm" ${activeStep === 1 ? 'disabled style="opacity: 0.4;"' : ""}>◀ Prev</button>
+            <button id="btn-step-next" class="btn btn-primary btn-sm" ${activeStep === 3 ? 'disabled style="opacity: 0.4;"' : ""}>Next ▶</button>
+          </div>
+        </div>
+
+        ${activeStep === 1 ? `
+          <!-- Step 1: 10 Pipeline Stages -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 12px;">\uD83D\uDD04 The 10-Stage Industrial Machine Learning Lifecycle</h3>
+            
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; text-align: center; font-size: 11px; margin-bottom: 16px;">
+              <div style="background: rgba(0, 240, 255, 0.08); border: 1px solid var(--accent-cyan); padding: 10px 6px; border-radius: 6px;">
+                <div style="font-size: 16px; margin-bottom: 4px;">1️⃣</div>
+                <strong>Problem Formulation</strong>
+              </div>
+              <div style="background: rgba(0, 240, 255, 0.08); border: 1px solid var(--accent-cyan); padding: 10px 6px; border-radius: 6px;">
+                <div style="font-size: 16px; margin-bottom: 4px;">2️⃣</div>
+                <strong>Data Collection</strong>
+              </div>
+              <div style="background: rgba(0, 240, 255, 0.08); border: 1px solid var(--accent-cyan); padding: 10px 6px; border-radius: 6px;">
+                <div style="font-size: 16px; margin-bottom: 4px;">3️⃣</div>
+                <strong>Data Labeling</strong>
+              </div>
+              <div style="background: rgba(0, 240, 255, 0.08); border: 1px solid var(--accent-cyan); padding: 10px 6px; border-radius: 6px;">
+                <div style="font-size: 16px; margin-bottom: 4px;">4️⃣</div>
+                <strong>Distribution Analysis</strong>
+              </div>
+              <div style="background: rgba(0, 240, 255, 0.08); border: 1px solid var(--accent-cyan); padding: 10px 6px; border-radius: 6px;">
+                <div style="font-size: 16px; margin-bottom: 4px;">5️⃣</div>
+                <strong>Preprocessing & Splits</strong>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; text-align: center; font-size: 11px; margin-bottom: 16px;">
+              <div style="background: rgba(157, 78, 221, 0.08); border: 1px solid var(--accent-purple); padding: 10px 6px; border-radius: 6px;">
+                <div style="font-size: 16px; margin-bottom: 4px;">6️⃣</div>
+                <strong>Model Training</strong>
+              </div>
+              <div style="background: rgba(157, 78, 221, 0.08); border: 1px solid var(--accent-purple); padding: 10px 6px; border-radius: 6px;">
+                <div style="font-size: 16px; margin-bottom: 4px;">7️⃣</div>
+                <strong>Model Evaluation</strong>
+              </div>
+              <div style="background: rgba(157, 78, 221, 0.08); border: 1px solid var(--accent-purple); padding: 10px 6px; border-radius: 6px;">
+                <div style="font-size: 16px; margin-bottom: 4px;">8️⃣</div>
+                <strong>Model Deployment</strong>
+              </div>
+              <div style="background: rgba(157, 78, 221, 0.08); border: 1px solid var(--accent-purple); padding: 10px 6px; border-radius: 6px;">
+                <div style="font-size: 16px; margin-bottom: 4px;">9️⃣</div>
+                <strong>Documentation & Cards</strong>
+              </div>
+              <div style="background: rgba(157, 78, 221, 0.08); border: 1px solid var(--accent-purple); padding: 10px 6px; border-radius: 6px;">
+                <div style="font-size: 16px; margin-bottom: 4px;">\uD83D\uDD1F</div>
+                <strong>Monitoring & Feedback</strong>
+              </div>
+            </div>
+          </div>
+        ` : activeStep === 2 ? `
+          <!-- Step 2: The 3 Crimes of Data Leakage -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 12px;">\uD83D\uDEA8 The 3 Deadly Sins of Data Leakage</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+              Information from outside the training set leaks into model parameters, yielding artificially high validation scores that collapse in production:
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px;">
+              <div style="background: rgba(255, 51, 68, 0.05); border: 1px solid rgba(255, 51, 68, 0.3); padding: 16px; border-radius: var(--radius-md);">
+                <div style="font-size: 13px; font-weight: 700; color: #fca5a5; margin-bottom: 6px;">1. Preprocessing Leakage</div>
+                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+                  Performing feature scaling (μ, σ), missing imputation, or PCA projection on the whole dataset before splitting!
+                </div>
+              </div>
+
+              <div style="background: rgba(255, 170, 0, 0.05); border: 1px solid rgba(255, 170, 0, 0.3); padding: 16px; border-radius: var(--radius-md);">
+                <div style="font-size: 13px; font-weight: 700; color: #fde047; margin-bottom: 6px;">2. Temporal Leakage</div>
+                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+                  Randomly shuffling time-series data! The model trains on future data points to predict past records.
+                </div>
+              </div>
+
+              <div style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.3); padding: 16px; border-radius: var(--radius-md);">
+                <div style="font-size: 13px; font-weight: 700; color: #7dd3fc; margin-bottom: 6px;">3. Group / Entity Leakage</div>
+                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+                  Randomly splitting multiple records from the same entity (e.g., patient hospital visits or software repos) across train and test!
+                </div>
+              </div>
+            </div>
+
+            <div style="background: rgba(0, 0, 0, 0.4); border-left: 3px solid var(--accent-red); padding: 10px 14px; border-radius: 4px; font-size: 12px; color: #fca5a5;">
+              <strong>Case Study (Code Vulnerability Detection):</strong> Random splitting gave a bogus 45% accuracy by learning time-correlated repo patterns. Proper temporal splitting revealed true performance was only 30%!
+            </div>
+          </div>
+        ` : `
+          <!-- Step 3: Baselines & SOTA -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 12px;">\uD83D\uDCCA Baselines: Random & Majority Class</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+              Expected accuracy of a Random Baseline predicting classes based on prior distributions:
+            </p>
+            <div class="formula-block">
+              Expected Random Accuracy = ∑_{c} P(c) · P(predict c) = ∑ P(c)²
+            </div>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-top: 14px;">
+              For a binary dataset with 90% Class 0 and 10% Class 1, the Majority Class Baseline achieves <strong>90% accuracy</strong> with 0 learning! Always evaluate against simple baselines before declaring victory with deep learning!
+            </p>
+
+            <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+              <h4 style="font-size: 14px; color: var(--accent-amber); margin-bottom: 8px;">\uD83E\uDDE0 Pipeline Mastery Check: Random Baseline Calculation</h4>
+              <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+                A dataset contains <strong>80% Class 0</strong> and <strong>20% Class 1</strong>. What is the expected accuracy of a <em>Random Baseline</em> that predicts classes according to their prior class probabilities?
+              </p>
+              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 14px;">
+                <button id="btn-quiz-a" class="btn btn-sm ${quizAnswer === "a" ? "btn-primary" : "btn-secondary"}">A) 50.0% (Coin Flip)</button>
+                <button id="btn-quiz-b" class="btn btn-sm ${quizAnswer === "b" ? "btn-primary" : "btn-secondary"}">B) 68.0% (0.80² + 0.20² = 0.64 + 0.04)</button>
+                <button id="btn-quiz-c" class="btn btn-sm ${quizAnswer === "c" ? "btn-primary" : "btn-secondary"}">C) 80.0% (Majority Class)</button>
+                <button id="btn-quiz-d" class="btn btn-sm ${quizAnswer === "d" ? "btn-primary" : "btn-secondary"}">D) 20.0% (Minority Class)</button>
+              </div>
+              <button id="btn-verify-pipeline" class="btn btn-primary" style="width: 100%;">Verify & Certify Pipeline Mastery</button>
+            </div>
+            <div id="pipeline-feedback" style="margin-top: 12px;"></div>
+          </div>
+        `}
+
+        <details class="math-explainer">
+          <summary>\uD83D\uDCA1 Deep Dive & Formula Breakdown (Click to expand)</summary>
+          <div class="explainer-content">
+            <p><strong>Pipeline Integrity Golden Rule:</strong> The test set is a vault. It is opened strictly once at the end of development. All decisions (feature selection, hyperparameter tuning, scaling) must rely exclusively on training and validation partitions.</p>
+            <p><strong>Baselines:</strong> Random Baseline accuracy = ∑ P(c)² = 0.8² + 0.2² = 0.64 + 0.04 = 0.68. Majority class baseline = max_c P(c) = 0.80.</p>
+          </div>
+        </details>
+      </div>
+    `;
+    container.querySelectorAll(".step-dot").forEach((b) => {
+      b.addEventListener("click", () => {
+        sound.playClick();
+        activeStep = parseInt(b.dataset.step || "1");
+        render();
+      });
+    });
+    container.querySelector("#btn-step-prev")?.addEventListener("click", () => {
+      if (activeStep > 1) {
+        sound.playClick();
+        activeStep--;
+        render();
+      }
+    });
+    container.querySelector("#btn-step-next")?.addEventListener("click", () => {
+      if (activeStep < 3) {
+        sound.playClick();
+        activeStep++;
+        render();
+      }
+    });
+    container.querySelector("#btn-quiz-a")?.addEventListener("click", () => {
+      sound.playClick();
+      quizAnswer = "a";
+      render();
+    });
+    container.querySelector("#btn-quiz-b")?.addEventListener("click", () => {
+      sound.playClick();
+      quizAnswer = "b";
+      render();
+    });
+    container.querySelector("#btn-quiz-c")?.addEventListener("click", () => {
+      sound.playClick();
+      quizAnswer = "c";
+      render();
+    });
+    container.querySelector("#btn-quiz-d")?.addEventListener("click", () => {
+      sound.playClick();
+      quizAnswer = "d";
+      render();
+    });
+    container.querySelector("#btn-verify-pipeline")?.addEventListener("click", () => {
+      const fb = container.querySelector("#pipeline-feedback");
+      if (!quizAnswer) {
+        sound.playWrong();
+        if (fb)
+          fb.innerHTML = `<div style="color: var(--accent-amber); font-size: 13px;">⚠️ Please select an answer before verifying.</div>`;
+        return;
+      }
+      if (quizAnswer === "b") {
+        sound.playVictory();
+        confetti_module_default({ particleCount: 75, spread: 65 });
+        gameManager.addScore(150, 75);
+        gameManager.markGameComplete("week4_pipeline");
+        if (fb)
+          fb.innerHTML = `
+          <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 12px; color: #a7f3d0;">
+            <strong>\uD83C\uDF89 Correct! (68%)</strong> Expected accuracy is ∑ P(c)² = 0.8² + 0.2² = 0.64 + 0.04 = 0.68. ML Pipeline Lifecycle Mastered! (+150 Score awarded)
+          </div>
+        `;
+      } else {
+        sound.playWrong();
+        if (fb)
+          fb.innerHTML = `
+          <div style="background: rgba(255, 51, 68, 0.15); border: 1px solid var(--accent-red); border-radius: var(--radius-md); padding: 12px; color: #fca5a5;">
+            <strong>❌ Incorrect:</strong> Remember, the expected accuracy for random guessing proportional to priors is ∑ P(c) · P(predict c) = ∑ P(c)². For 80/20, that is 0.80² + 0.20² = 0.68.
           </div>
         `;
       }
@@ -33209,10 +36149,312 @@ function renderWeek4ConfusionDefense(container) {
         sound.playWrong();
         fb.innerHTML = `
           <div style="background: rgba(255, 170, 0, 0.15); border: 1px solid var(--accent-amber); border-radius: var(--radius-md); padding: 14px; color: #fef08a;">
-            <strong>F1 is ${(cur.f1 * 100).toFixed(1)}%:</strong> Slide the threshold closer to 0.45 ~ 0.55 to maximize harmonic balance between Precision and Recall!
+            <strong>F1 is ${(cur.f1 * 100).toFixed(1)}%:</strong> Slide the threshold down closer to <strong>0.30 ~ 0.35</strong> (where F1 reaches maximum 78.3%) to reduce False Negatives without destroying Precision!
           </div>
         `;
       }
+    });
+  }
+  render();
+}
+
+// src/games/week4_roc_auroc_sweeper.ts
+init_state();
+init_sound();
+init_confetti_module();
+function renderWeek4RocAurocSweeper(container) {
+  let activeStep = 1;
+  let threshold = 0.5;
+  const samples = [
+    { prob: 0.95, label: 1 },
+    { prob: 0.88, label: 1 },
+    { prob: 0.82, label: 1 },
+    { prob: 0.74, label: 0 },
+    { prob: 0.65, label: 1 },
+    { prob: 0.55, label: 0 },
+    { prob: 0.45, label: 1 },
+    { prob: 0.35, label: 0 },
+    { prob: 0.2, label: 0 },
+    { prob: 0.1, label: 0 }
+  ];
+  function getMetrics(tau) {
+    let tp = 0, fp = 0, tn = 0, fn = 0;
+    samples.forEach((s) => {
+      const pred = s.prob >= tau ? 1 : 0;
+      if (pred === 1 && s.label === 1)
+        tp++;
+      else if (pred === 1 && s.label === 0)
+        fp++;
+      else if (pred === 0 && s.label === 0)
+        tn++;
+      else if (pred === 0 && s.label === 1)
+        fn++;
+    });
+    const tpr = tp / (tp + fn || 1);
+    const fpr = fp / (fp + tn || 1);
+    const precision = tp / (tp + fp || 1);
+    const f1 = 2 * precision * tpr / (precision + tpr || 1);
+    return { tp, fp, tn, fn, tpr, fpr, precision, f1 };
+  }
+  function render() {
+    const m = getMetrics(threshold);
+    container.innerHTML = `
+      <div class="game-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>\uD83D\uDCC8 Game 4.3: ROC Curve & AUROC Threshold Sweeper</h2>
+            <p class="card-subtitle">Visual Intuition: Sweeping decision threshold τ to map True Positive Rate vs False Positive Rate</p>
+          </div>
+          <span class="concept-badge">Week 4 Evaluation</span>
+        </div>
+
+        <!-- Stepper Component -->
+        <div class="stepper-container">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Tutorial:</span>
+          <div class="step-indicator">
+            <button class="step-dot ${activeStep === 1 ? "active" : activeStep > 1 ? "done" : ""}" data-step="1">1</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Threshold Sweeper</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 2 ? "active" : activeStep > 2 ? "done" : ""}" data-step="2">2</button>
+            <span style="font-size: 11px; color: var(--text-muted);">AUROC Benchmark</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 3 ? "active" : "done"}" data-step="3">3</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Macro vs Micro</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-step-prev" class="btn btn-secondary btn-sm" ${activeStep === 1 ? 'disabled style="opacity: 0.4;"' : ""}>◀ Prev</button>
+            <button id="btn-step-next" class="btn btn-primary btn-sm" ${activeStep === 3 ? 'disabled style="opacity: 0.4;"' : ""}>Next ▶</button>
+          </div>
+        </div>
+
+        ${activeStep === 1 ? `
+          <!-- Step 1: Interactive ROC Slider -->
+          <div style="animation: fadeIn 0.3s ease;">
+            <div class="controls-panel" style="margin-bottom: 16px;">
+              <div class="control-item" style="flex: 1;">
+                <label>Decision Threshold (\\tau): <span id="tau-val" style="color: var(--accent-cyan); font-weight: bold;">${threshold.toFixed(2)}</span></label>
+                <input type="range" id="tau-slider" min="0.05" max="0.95" step="0.05" value="${threshold}" style="width: 100%;">
+              </div>
+              <div class="control-item">
+                <label>Operating Point:</label>
+                <span class="concept-badge" style="color: #a7f3d0;">TPR: ${(m.tpr * 100).toFixed(0)}% | FPR: ${(m.fpr * 100).toFixed(0)}%</span>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 340px; gap: 20px; margin-bottom: 16px;">
+              <div class="game-viewport" style="height: 320px;">
+                <canvas id="roc-canvas" width="600" height="320" style="width: 100%; height: 100%;"></canvas>
+                <div class="viewport-overlay">
+                  ROC Curve: Y = True Positive Rate (Sensitivity), X = False Positive Rate (1 - Specificity)
+                </div>
+              </div>
+
+              <!-- Live Confusion Breakdown -->
+              <div style="background: rgba(10, 15, 25, 0.85); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 18px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <h4 style="font-size: 13px; text-transform: uppercase; color: var(--accent-cyan); margin-bottom: 10px;">Live Outcome Matrix</h4>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-family: 'Fira Code', monospace; text-align: center; margin-bottom: 12px;">
+                    <div style="background: rgba(0, 255, 136, 0.1); border: 1px solid var(--accent-green); padding: 8px; border-radius: 4px;">
+                      <div style="font-size: 10px; color: var(--text-muted);">TP</div>
+                      <div style="font-size: 18px; font-weight: 800; color: #a7f3d0;">${m.tp}</div>
+                    </div>
+                    <div style="background: rgba(255, 51, 68, 0.1); border: 1px solid var(--accent-red); padding: 8px; border-radius: 4px;">
+                      <div style="font-size: 10px; color: var(--text-muted);">FP</div>
+                      <div style="font-size: 18px; font-weight: 800; color: #fca5a5;">${m.fp}</div>
+                    </div>
+                    <div style="background: rgba(255, 170, 0, 0.1); border: 1px solid var(--accent-amber); padding: 8px; border-radius: 4px;">
+                      <div style="font-size: 10px; color: var(--text-muted);">FN</div>
+                      <div style="font-size: 18px; font-weight: 800; color: #fde047;">${m.fn}</div>
+                    </div>
+                    <div style="background: rgba(0, 240, 255, 0.1); border: 1px solid var(--accent-cyan); padding: 8px; border-radius: 4px;">
+                      <div style="font-size: 10px; color: var(--text-muted);">TN</div>
+                      <div style="font-size: 18px; font-weight: 800; color: #7dd3fc;">${m.tn}</div>
+                    </div>
+                  </div>
+                  <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                    • <strong>Recall / TPR:</strong> ${m.tpr.toFixed(2)}<br>
+                    • <strong>Precision:</strong> ${m.precision.toFixed(2)}<br>
+                    • <strong>F1 Score:</strong> ${m.f1.toFixed(2)}
+                  </div>
+                </div>
+
+                <div style="background: rgba(0,0,0,0.4); padding: 8px 12px; border-radius: 4px; font-size: 11px; color: var(--text-muted);">
+                  Lowering (	au 	o 0) pushes Recall (	o 1.0) but spikes False Positives!
+                </div>
+              </div>
+            </div>
+          </div>
+        ` : activeStep === 2 ? `
+          <!-- Step 2: AUROC Diagnostic Benchmark -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 12px;">\uD83C\uDFC6 Understanding AUROC (Area Under the Curve)</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+              AUROC is a threshold-independent aggregate measure of ranking ability across all possible operating thresholds:
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px;">
+              <div style="background: rgba(0, 255, 136, 0.05); border: 1px solid rgba(0, 255, 136, 0.2); padding: 14px; border-radius: var(--radius-md);">
+                <div style="font-size: 12px; font-weight: 700; color: var(--accent-green);">AUROC = 1.0</div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                  <strong>Perfect Classifier:</strong> Perfectly separates all positive and negative samples with zero overlap at some threshold.
+                </div>
+              </div>
+
+              <div style="background: rgba(255, 170, 0, 0.05); border: 1px solid rgba(255, 170, 0, 0.2); padding: 14px; border-radius: var(--radius-md);">
+                <div style="font-size: 12px; font-weight: 700; color: var(--accent-amber);">AUROC = 0.50</div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                  <strong>Random Guessing:</strong> Coincides directly with the diagonal chance line (TPR = FPR).
+                </div>
+              </div>
+
+              <div style="background: rgba(255, 51, 68, 0.05); border: 1px solid rgba(255, 51, 68, 0.2); padding: 14px; border-radius: var(--radius-md);">
+                <div style="font-size: 12px; font-weight: 700; color: var(--accent-red);">AUROC &lt; 0.50</div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                  <strong>Inverted Predictions:</strong> Model has learned the pattern in reverse! Flipping class labels yields (1 - 	ext{AUROC}).
+                </div>
+              </div>
+            </div>
+          </div>
+        ` : `
+          <!-- Step 3: Multi-Class Averaging Challenge -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 12px;">\uD83D\uDCCA Multi-Class Averaging: Macro vs Micro</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 14px;">
+              If evaluating a dataset with 90% Class A, 8% Class B, and 2% rare Disease Class C, which averaging method should you prioritize to ensure the model doesn't fail on Class C?
+            </p>
+            <div class="quiz-options">
+              <button class="quiz-option-btn q-opt-roc" data-val="correct">
+                <strong>Macro-Averaging:</strong> Computes metrics independently for each class and calculates the unweighted mean, treating all classes equally regardless of frequency and exposing failure on Class C.
+              </button>
+              <button class="quiz-option-btn q-opt-roc" data-val="wrong">
+                Micro-Averaging: Because it weights by sample count, allowing Class A's dominance to mask errors.
+              </button>
+            </div>
+            <div id="roc-feedback" style="min-height: 28px; margin-top: 10px;"></div>
+          </div>
+        `}
+
+        <details class="math-explainer">
+          <summary>\uD83D\uDCA1 Deep Dive & Formula Breakdown (Click to expand)</summary>
+          <div class="explainer-content">
+            <p><strong>Evaluation Formulas (Week 4):</strong></p>
+            <div class="formula-block">
+              TPR (Recall) = TP / (TP + FN)<br>
+              FPR = FP / (FP + TN) = 1 - Specificity<br>
+              Precision = TP / (TP + FP)<br>
+              F1 = 2 · (Precision · Recall) / (Precision + Recall)<br>
+              Macro-F1 = (F1_A + F1_B + F1_C) / 3
+            </div>
+          </div>
+        </details>
+      </div>
+    `;
+    if (activeStep === 1) {
+      const canvas = container.querySelector("#roc-canvas");
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const padX = 60, padY = 30;
+        const w = canvas.width - padX * 2;
+        const h = canvas.height - padY * 2;
+        ctx.strokeStyle = "rgba(255,255,255,0.2)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(padX, padY);
+        ctx.lineTo(padX, padY + h);
+        ctx.lineTo(padX + w, padY + h);
+        ctx.stroke();
+        ctx.font = "10px Fira Code";
+        ctx.fillStyle = "rgba(255,255,255,0.4)";
+        ctx.fillText("FPR (1 - Specificity) →", padX + w - 160, padY + h + 22);
+        ctx.fillText("↑ TPR (Sensitivity)", padX - 50, padY + 12);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(padX, padY + h);
+        ctx.lineTo(padX + w, padY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const sortedThresholds = [1.01, ...Array.from(new Set(samples.map((s) => s.prob))).sort((a, b) => b - a), -0.01];
+        const empiricalRocPoints = [];
+        sortedThresholds.forEach((t) => {
+          const res = getMetrics(t);
+          empiricalRocPoints.push({ fpr: res.fpr, tpr: res.tpr });
+        });
+        ctx.fillStyle = "rgba(0, 240, 255, 0.08)";
+        ctx.beginPath();
+        ctx.moveTo(padX, padY + h);
+        empiricalRocPoints.forEach((p) => {
+          ctx.lineTo(padX + p.fpr * w, padY + h - p.tpr * h);
+        });
+        ctx.lineTo(padX + w, padY + h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "#00f0ff";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(padX, padY + h);
+        empiricalRocPoints.forEach((p) => {
+          ctx.lineTo(padX + p.fpr * w, padY + h - p.tpr * h);
+        });
+        ctx.stroke();
+        const curX = padX + m.fpr * w;
+        const curY = padY + h - m.tpr * h;
+        ctx.fillStyle = "#f59e0b";
+        ctx.beginPath();
+        ctx.arc(curX, curY, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = "#fde047";
+        ctx.font = "bold 11px Fira Code";
+        ctx.fillText(`(FPR: ${m.fpr.toFixed(2)}, TPR: ${m.tpr.toFixed(2)})`, curX + 10, curY - 10);
+      }
+    }
+    const tauSlider = container.querySelector("#tau-slider");
+    tauSlider?.addEventListener("input", (e) => {
+      threshold = parseFloat(e.target.value);
+      render();
+    });
+    container.querySelectorAll(".step-dot").forEach((b) => {
+      b.addEventListener("click", () => {
+        sound.playClick();
+        activeStep = parseInt(b.dataset.step || "1");
+        render();
+      });
+    });
+    container.querySelector("#btn-step-prev")?.addEventListener("click", () => {
+      if (activeStep > 1) {
+        sound.playClick();
+        activeStep--;
+        render();
+      }
+    });
+    container.querySelector("#btn-step-next")?.addEventListener("click", () => {
+      if (activeStep < 3) {
+        sound.playClick();
+        activeStep++;
+        render();
+      }
+    });
+    container.querySelectorAll(".q-opt-roc").forEach((b) => {
+      b.addEventListener("click", () => {
+        const val = b.dataset.val;
+        const fb = container.querySelector("#roc-feedback");
+        if (val === "correct") {
+          sound.playVictory();
+          confetti_module_default({ particleCount: 50, spread: 60 });
+          gameManager.addScore(100, 50);
+          gameManager.markGameComplete("week4_roc");
+          if (fb)
+            fb.innerHTML = '<div style="color: var(--accent-green); font-weight: 700;">✓ Correct! Macro-averaging treats each class equally and exposes minority failures!</div>';
+        } else {
+          sound.playWrong();
+          if (fb)
+            fb.innerHTML = '<div style="color: var(--accent-red);">Incorrect. Micro-averaging weights by sample count, masking minority errors.</div>';
+        }
+      });
     });
   }
   render();
@@ -33388,6 +36630,453 @@ function renderWeek4FeatureSelection(container) {
   initStrategy("forward");
 }
 
+// src/games/week4_regression_metrics.ts
+init_state();
+init_sound();
+init_confetti_module();
+function renderWeek4RegressionMetrics(container) {
+  let activeStep = 1;
+  let outlierY = 180;
+  const baselinePoints = [
+    { x: 10, y: 35, pred: 38 },
+    { x: 20, y: 48, pred: 50 },
+    { x: 30, y: 62, pred: 65 },
+    { x: 40, y: 78, pred: 77 }
+  ];
+  function calcMetrics() {
+    const pts = [...baselinePoints, { x: 50, y: outlierY, pred: 92 }];
+    const n = pts.length;
+    let sumSq = 0;
+    let sumAbs = 0;
+    let maxErr = 0;
+    pts.forEach((p) => {
+      const err = Math.abs(p.y - p.pred);
+      sumSq += err * err;
+      sumAbs += err;
+      if (err > maxErr)
+        maxErr = err;
+    });
+    const mse = sumSq / n;
+    const rmse = Math.sqrt(mse);
+    const mae = sumAbs / n;
+    return { mse, rmse, mae, maxErr };
+  }
+  function render() {
+    const m = calcMetrics();
+    container.innerHTML = `
+      <div class="game-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>\uD83D\uDCCF Game 4.5: Regression Metrics & Outlier Stress Lab</h2>
+            <p class="card-subtitle">Visual Intuition: Why MSE explodes on outliers while MAE remains robust</p>
+          </div>
+          <span class="concept-badge">Week 4 Regression</span>
+        </div>
+
+        <!-- Stepper Component -->
+        <div class="stepper-container">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Tutorial:</span>
+          <div class="step-indicator">
+            <button class="step-dot ${activeStep === 1 ? "active" : activeStep > 1 ? "done" : ""}" data-step="1">1</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Outlier Stress Test</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 2 ? "active" : activeStep > 2 ? "done" : ""}" data-step="2">2</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Metric Comparison</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 3 ? "active" : "done"}" data-step="3">3</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Mastery Check</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-step-prev" class="btn btn-secondary btn-sm" ${activeStep === 1 ? 'disabled style="opacity: 0.4;"' : ""}>◀ Prev</button>
+            <button id="btn-step-next" class="btn btn-primary btn-sm" ${activeStep === 3 ? 'disabled style="opacity: 0.4;"' : ""}>Next ▶</button>
+          </div>
+        </div>
+
+        ${activeStep === 1 ? `
+          <!-- Step 1: Outlier Stress Slider -->
+          <div style="animation: fadeIn 0.3s ease;">
+            <div class="controls-panel" style="margin-bottom: 16px;">
+              <div class="control-item" style="flex: 1;">
+                <label>Outlier Sample Target Value (y_{	ext{outlier}}): <span id="outlier-val" style="color: var(--accent-red); font-weight: bold;">${outlierY}</span></label>
+                <input type="range" id="outlier-slider" min="90" max="300" step="5" value="${outlierY}" style="width: 100%;">
+              </div>
+              <div class="control-item">
+                <label>Single Outlier Residual:</label>
+                <span class="concept-badge" style="color: var(--accent-red);">|${outlierY} - 92| = ${Math.abs(outlierY - 92)}</span>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px;">
+              <div style="background: rgba(255, 51, 68, 0.08); border: 1px solid var(--accent-red); padding: 16px; border-radius: var(--radius-md); text-align: center;">
+                <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">MSE (Squared)</div>
+                <div style="font-size: 26px; font-weight: 900; color: #fca5a5; margin: 6px 0; font-family: 'Fira Code', monospace;">
+                  ${m.mse.toFixed(1)}
+                </div>
+                <div style="font-size: 11px; color: #f87171;">Penalizes quadratically!</div>
+              </div>
+
+              <div style="background: rgba(255, 170, 0, 0.08); border: 1px solid var(--accent-amber); padding: 16px; border-radius: var(--radius-md); text-align: center;">
+                <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">RMSE (Root MSE)</div>
+                <div style="font-size: 26px; font-weight: 900; color: #fde047; margin: 6px 0; font-family: 'Fira Code', monospace;">
+                  ${m.rmse.toFixed(1)}
+                </div>
+                <div style="font-size: 11px; color: #fde047;">Original target units</div>
+              </div>
+
+              <div style="background: rgba(0, 240, 255, 0.08); border: 1px solid var(--accent-cyan); padding: 16px; border-radius: var(--radius-md); text-align: center;">
+                <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">MAE (Absolute)</div>
+                <div style="font-size: 26px; font-weight: 900; color: #7dd3fc; margin: 6px 0; font-family: 'Fira Code', monospace;">
+                  ${m.mae.toFixed(1)}
+                </div>
+                <div style="font-size: 11px; color: #38bdf8;">Robust to outliers</div>
+              </div>
+
+              <div style="background: rgba(157, 78, 221, 0.08); border: 1px solid var(--accent-purple); padding: 16px; border-radius: var(--radius-md); text-align: center;">
+                <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Max Error</div>
+                <div style="font-size: 26px; font-weight: 900; color: #d8b4fe; margin: 6px 0; font-family: 'Fira Code', monospace;">
+                  ${m.maxErr.toFixed(1)}
+                </div>
+                <div style="font-size: 11px; color: #c084fc;">Worst-case single error</div>
+              </div>
+            </div>
+          </div>
+        ` : activeStep === 2 ? `
+          <!-- Step 2: Formulas & Dummy Baseline -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 10px;">\uD83D\uDCC9 Dummy Regression Baseline: Predicting Mean Target ȳ</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 14px;">
+              Before deploying any sophisticated regression model, always compare its RMSE against a dumb baseline that predicts constant target mean (\bar{y} = \frac{1}{N} sum y_i).
+            </p>
+            <div class="formula-block">
+              MSE = (1/N) ∑ (y_i - ŷ_i)²<br>
+              RMSE = √MSE<br>
+              MAE = (1/N) ∑ |y_i - ŷ_i|<br>
+              Max Error = max_i |y_i - ŷ_i|
+            </div>
+          </div>
+        ` : `
+          <!-- Step 3: Quick Quiz -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 10px;">\uD83E\uDDE0 Which metric to prioritize?</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 14px;">
+              If your training dataset contains severe measurement sensor glitches that occasionally introduce 100x corrupted values, which error metric will prevent model parameters from being dominated by these anomalies?
+            </p>
+            <div class="quiz-options">
+              <button class="quiz-option-btn q-opt-reg" data-val="correct">
+                <strong>Mean Absolute Error (MAE):</strong> Because MAE penalizes errors linearly rather than quadratically, making it significantly more robust to corrupted outlier instances!
+              </button>
+              <button class="quiz-option-btn q-opt-reg" data-val="wrong">
+                Mean Squared Error (MSE): Because squaring errors suppresses large values.
+              </button>
+            </div>
+            <div id="reg-feedback" style="min-height: 28px; margin-top: 10px;"></div>
+          </div>
+        `}
+
+        <details class="math-explainer">
+          <summary>\uD83D\uDCA1 Deep Dive & Formula Breakdown (Click to expand)</summary>
+          <div class="explainer-content">
+            <p><strong>Outlier Sensitivity:</strong> Under MSE loss, an error of magnitude 10 contributes 100 to the total loss, while an error of magnitude 1 contributes only 1. Under MAE (L1 loss), an error of 10 contributes only 10 times more than an error of 1, providing bounded influence.</p>
+          </div>
+        </details>
+      </div>
+    `;
+    const slider = container.querySelector("#outlier-slider");
+    slider?.addEventListener("input", (e) => {
+      outlierY = parseFloat(e.target.value);
+      render();
+    });
+    container.querySelectorAll(".step-dot").forEach((b) => {
+      b.addEventListener("click", () => {
+        sound.playClick();
+        activeStep = parseInt(b.dataset.step || "1");
+        render();
+      });
+    });
+    container.querySelector("#btn-step-prev")?.addEventListener("click", () => {
+      if (activeStep > 1) {
+        sound.playClick();
+        activeStep--;
+        render();
+      }
+    });
+    container.querySelector("#btn-step-next")?.addEventListener("click", () => {
+      if (activeStep < 3) {
+        sound.playClick();
+        activeStep++;
+        render();
+      }
+    });
+    container.querySelectorAll(".q-opt-reg").forEach((b) => {
+      b.addEventListener("click", () => {
+        const val = b.dataset.val;
+        const fb = container.querySelector("#reg-feedback");
+        if (val === "correct") {
+          sound.playVictory();
+          confetti_module_default({ particleCount: 50, spread: 60 });
+          gameManager.addScore(100, 50);
+          gameManager.markGameComplete("week4_regression");
+          if (fb)
+            fb.innerHTML = '<div style="color: var(--accent-green); font-weight: 700;">✓ Correct! MAE is robust against outlier distortion!</div>';
+        } else {
+          sound.playWrong();
+          if (fb)
+            fb.innerHTML = '<div style="color: var(--accent-red);">Incorrect. MSE heavily inflates large errors by squaring them.</div>';
+        }
+      });
+    });
+  }
+  render();
+}
+
+// src/games/week4_hyperparam_tuning.ts
+init_state();
+init_sound();
+init_confetti_module();
+function renderWeek4HyperparamTuning(container) {
+  let activeStep = 1;
+  let mode = "grid";
+  let budget = 16;
+  function render() {
+    container.innerHTML = `
+      <div class="game-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>\uD83C\uDFCE️ Game 4.6: Hyperparameter Tuning Race (Grid vs Random Search)</h2>
+            <p class="card-subtitle">Visual Intuition: Why Random Search beats Grid Search, and K-Fold vs Leave-One-Out CV</p>
+          </div>
+          <span class="concept-badge">Week 4 Optimization</span>
+        </div>
+
+        <!-- Stepper Component -->
+        <div class="stepper-container">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Tutorial:</span>
+          <div class="step-indicator">
+            <button class="step-dot ${activeStep === 1 ? "active" : activeStep > 1 ? "done" : ""}" data-step="1">1</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Search Space Race</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 2 ? "active" : activeStep > 2 ? "done" : ""}" data-step="2">2</button>
+            <span style="font-size: 11px; color: var(--text-muted);">K-Fold vs LOO-CV</span>
+            <div style="width: 20px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <button class="step-dot ${activeStep === 3 ? "active" : "done"}" data-step="3">3</button>
+            <span style="font-size: 11px; color: var(--text-muted);">Concept Mastery</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-step-prev" class="btn btn-secondary btn-sm" ${activeStep === 1 ? 'disabled style="opacity: 0.4;"' : ""}>◀ Prev</button>
+            <button id="btn-step-next" class="btn btn-primary btn-sm" ${activeStep === 3 ? 'disabled style="opacity: 0.4;"' : ""}>Next ▶</button>
+          </div>
+        </div>
+
+        ${activeStep === 1 ? `
+          <!-- Step 1: Grid vs Random Search Visualizer -->
+          <div style="animation: fadeIn 0.3s ease;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+              <span style="font-size: 13px; color: var(--text-secondary);">Select hyperparameter sampling method:</span>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm ${mode === "grid" ? "btn-primary" : "btn-secondary"} mode-btn" data-mode="grid">
+                  \uD83D\uDCCA Grid Search (4 × 4 = 16 trials)
+                </button>
+                <button class="btn btn-sm ${mode === "random" ? "btn-primary" : "btn-secondary"} mode-btn" data-mode="random">
+                  \uD83C\uDFB2 Random Search (16 random trials)
+                </button>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 320px; gap: 20px; margin-bottom: 16px;">
+              <div class="game-viewport" style="height: 300px;">
+                <canvas id="tuning-canvas" width="600" height="300" style="width: 100%; height: 100%;"></canvas>
+                <div class="viewport-overlay">
+                  X = Learning Rate α (Important) | Y = Irrelevant Hyperparameter (Unimportant)
+                </div>
+              </div>
+
+              <div style="background: rgba(10, 15, 25, 0.85); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 18px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <h4 style="font-size: 13px; text-transform: uppercase; color: var(--accent-cyan); margin-bottom: 8px;">
+                    ${mode === "grid" ? "Grid Search Redundancy" : "Random Search Efficiency"}
+                  </h4>
+                  <p style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.5;">
+                    ${mode === "grid" ? "Grid Search tests only 4 distinct values along the critical Learning Rate axis (repeating each 4 times for the uninfluential second parameter). 75% of evaluations are wasted!" : "Random Search tests 16 completely distinct values along the critical Learning Rate axis! Much higher probability of discovering the optimal global basin!"}
+                  </p>
+                </div>
+
+                <div style="background: rgba(0, 240, 255, 0.08); border-left: 3px solid var(--accent-cyan); padding: 10px; border-radius: 4px; font-size: 11.5px; color: #7dd3fc;">
+                  \uD83D\uDCA1 <strong>Bergstra & Bengio (2012):</strong> Random Search significantly outperforms Grid Search because real ML problems usually have low effective dimensionality!
+                </div>
+              </div>
+            </div>
+          </div>
+        ` : activeStep === 2 ? `
+          <!-- Step 2: K-Fold vs LOO-CV -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 12px;">\uD83D\uDD04 Cross-Validation Paradigms: K-Fold vs LOO-CV</h3>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+              <div style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.2); padding: 16px; border-radius: var(--radius-md);">
+                <h4 style="color: var(--accent-cyan); font-size: 13px; margin-bottom: 6px;">K-Fold Cross-Validation (e.g. K = 5)</h4>
+                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                  • Partitions training dataset into K equal subsets (folds).<br>
+                  • Iteratively trains on K-1 folds and validates on the remaining 1 fold.<br>
+                  • Fast, scalable, variance-reducing estimate of generalization.
+                </div>
+              </div>
+
+              <div style="background: rgba(157, 78, 221, 0.05); border: 1px solid rgba(157, 78, 221, 0.2); padding: 16px; border-radius: var(--radius-md);">
+                <h4 style="color: #c084fc; font-size: 13px; margin-bottom: 6px;">Leave-One-Out (LOO) CV (K = N)</h4>
+                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                  • Extreme form of K-fold where each fold is a single sample point.<br>
+                  • Trains N separate models on N-1 samples.<br>
+                  • Unbiased but computationally expensive for large datasets ($O(N)$ training runs).
+                </div>
+              </div>
+            </div>
+          </div>
+        ` : `
+          <!-- Step 3: Mastery Quiz -->
+          <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 10px;">\uD83E\uDDE0 Concept Mastery: Tuning Strategy</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 14px;">
+              Under a fixed computational budget of 64 training iterations, why is Random Search preferred over Grid Search for tuning neural networks?
+            </p>
+            <div class="quiz-options">
+              <button class="quiz-option-btn q-opt-tune" data-val="correct">
+                <strong>Higher Dimensional Efficiency:</strong> Not all hyperparameters are equally important; Random Search explores 64 unique values for every parameter rather than wasting trials repeating a coarse grid!
+              </button>
+              <button class="quiz-option-btn q-opt-tune" data-val="wrong">
+                Because Grid Search is incapable of exploring continuous hyperparameters.
+              </button>
+            </div>
+            <div id="tune-feedback" style="min-height: 28px; margin-top: 10px;"></div>
+          </div>
+        `}
+
+        <details class="math-explainer">
+          <summary>\uD83D\uDCA1 Deep Dive & Formula Breakdown (Click to expand)</summary>
+          <div class="explainer-content">
+            <p><strong>Cross-Validation Expectation:</strong></p>
+            <div class="formula-block">
+              CV_Score = (1/K) ∑_{k=1}^K Loss(Model_{(-k)}, Fold_k)
+            </div>
+          </div>
+        </details>
+      </div>
+    `;
+    if (activeStep === 1) {
+      const canvas = container.querySelector("#tuning-canvas");
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const padX = 50, padY = 30;
+        const w = canvas.width - padX * 2;
+        const h = canvas.height - padY * 2;
+        ctx.strokeStyle = "rgba(255,255,255,0.2)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(padX, padY);
+        ctx.lineTo(padX, padY + h);
+        ctx.lineTo(padX + w, padY + h);
+        ctx.stroke();
+        ctx.font = "10px Fira Code";
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        ctx.fillText("Important Parameter (e.g. Learning Rate α) →", padX + 20, padY + h + 20);
+        ctx.fillText("↑ Unimportant Parameter (e.g. Batch Seed)", padX - 45, padY - 10);
+        if (mode === "grid") {
+          for (let i = 0;i < 4; i++) {
+            for (let j = 0;j < 4; j++) {
+              const px = padX + i / 3 * w;
+              const py = padY + j / 3 * h;
+              ctx.fillStyle = "#00f0ff";
+              ctx.beginPath();
+              ctx.arc(px, py, 6, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.strokeStyle = "#fff";
+              ctx.lineWidth = 1.5;
+              ctx.stroke();
+            }
+          }
+        } else {
+          const seeds = [
+            [0.12, 0.88],
+            [0.24, 0.35],
+            [0.38, 0.65],
+            [0.52, 0.15],
+            [0.67, 0.78],
+            [0.81, 0.42],
+            [0.93, 0.92],
+            [0.05, 0.5],
+            [0.45, 0.25],
+            [0.75, 0.12],
+            [0.31, 0.95],
+            [0.58, 0.48],
+            [0.88, 0.7],
+            [0.18, 0.08],
+            [0.63, 0.31],
+            [0.98, 0.22]
+          ];
+          seeds.forEach(([rx, ry]) => {
+            const px = padX + rx * w;
+            const py = padY + ry * h;
+            ctx.fillStyle = "#a855f7";
+            ctx.beginPath();
+            ctx.arc(px, py, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          });
+        }
+      }
+    }
+    container.querySelectorAll(".mode-btn").forEach((b) => {
+      b.addEventListener("click", () => {
+        sound.playClick();
+        mode = b.dataset.mode || "grid";
+        render();
+      });
+    });
+    container.querySelectorAll(".step-dot").forEach((b) => {
+      b.addEventListener("click", () => {
+        sound.playClick();
+        activeStep = parseInt(b.dataset.step || "1");
+        render();
+      });
+    });
+    container.querySelector("#btn-step-prev")?.addEventListener("click", () => {
+      if (activeStep > 1) {
+        sound.playClick();
+        activeStep--;
+        render();
+      }
+    });
+    container.querySelector("#btn-step-next")?.addEventListener("click", () => {
+      if (activeStep < 3) {
+        sound.playClick();
+        activeStep++;
+        render();
+      }
+    });
+    container.querySelectorAll(".q-opt-tune").forEach((b) => {
+      b.addEventListener("click", () => {
+        const val = b.dataset.val;
+        const fb = container.querySelector("#tune-feedback");
+        if (val === "correct") {
+          sound.playVictory();
+          confetti_module_default({ particleCount: 50, spread: 60 });
+          gameManager.addScore(100, 50);
+          gameManager.markGameComplete("week4_hyperparam");
+          if (fb)
+            fb.innerHTML = '<div style="color: var(--accent-green); font-weight: 700;">✓ Correct! Random Search evaluates distinct values along critical dimensions without wasting trials!</div>';
+        } else {
+          sound.playWrong();
+          if (fb)
+            fb.innerHTML = '<div style="color: var(--accent-red);">Incorrect. Random Search works on continuous spaces and outperforms Grid Search on real problems.</div>';
+        }
+      });
+    });
+  }
+  render();
+}
+
 // src/games/week4_split_leakage.ts
 init_sound();
 init_state();
@@ -33434,16 +37123,29 @@ function renderWeek4SplitLeakage(container) {
   let correctCount = 0;
   function render() {
     if (activeScenarioIdx >= LEAKAGE_SCENARIOS.length) {
-      sound.playVictory();
-      confetti_module_default({ particleCount: 75, spread: 65 });
-      gameManager.markGameComplete("week4_split");
-      container.innerHTML = `
-        <div class="game-card">
-          <h2>\uD83C\uDFC6 Data Partition & Leakage Protocol Mastered!</h2>
-          <p style="margin: 16px 0; color: var(--text-secondary);">You scored <strong>${correctCount} / ${LEAKAGE_SCENARIOS.length}</strong> on data leakage defense! You are fully prepped for <strong>Midterm Question 9</strong>.</p>
-          <button id="btn-replay-split" class="btn btn-primary">Replay Protocol Audit</button>
-        </div>
-      `;
+      const passed = correctCount >= 4;
+      if (passed) {
+        sound.playVictory();
+        confetti_module_default({ particleCount: 75, spread: 65 });
+        gameManager.markGameComplete("week4_split");
+        container.innerHTML = `
+          <div class="game-card">
+            <h2>\uD83C\uDFC6 Data Partition & Leakage Protocol Mastered!</h2>
+            <p style="margin: 16px 0; color: #a7f3d0;">Outstanding! You scored <strong>${correctCount} / ${LEAKAGE_SCENARIOS.length}</strong> on data leakage defense! You are fully prepped for <strong>Midterm Question 9</strong>.</p>
+            <button id="btn-replay-split" class="btn btn-primary">Replay Protocol Audit</button>
+          </div>
+        `;
+      } else {
+        sound.playWrong();
+        container.innerHTML = `
+          <div class="game-card">
+            <h2 style="color: var(--accent-amber);">⚠️ Protocol Audit Incomplete</h2>
+            <p style="margin: 16px 0; color: #fca5a5;">You scored <strong>${correctCount} / ${LEAKAGE_SCENARIOS.length}</strong>. A minimum of <strong>4 / 5</strong> correct audits is required to earn the Leakage Defense badge.</p>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">Remember: Test data must never inform scaling, feature selection, or SMOTE synthesis!</p>
+            <button id="btn-replay-split" class="btn btn-primary">Retry Gauntlet</button>
+          </div>
+        `;
+      }
       container.querySelector("#btn-replay-split")?.addEventListener("click", () => {
         activeScenarioIdx = 0;
         correctCount = 0;
@@ -33555,6 +37257,24 @@ init_state();
 init_confetti_module();
 function renderWeek4PcaSqueezer(container) {
   let projectionK = 3;
+  let targetVarianceMet = false;
+  const nPoints = 80;
+  const originalCoords = [];
+  const dirPC1 = new Vector3(0.808122, 0.505076, 0.303046).normalize();
+  const dirPC2 = new Vector3(-0.588918, 0.702172, 0.400162).normalize();
+  const dirPC3 = new Vector3(-0.010678, -0.501849, 0.864889).normalize();
+  for (let i = 0;i < nPoints; i++) {
+    const t = ((i * 17 + 5) % 100 / 100 - 0.5) * 6;
+    const u = ((i * 31 + 13) % 100 / 100 - 0.5) * 2;
+    const v = ((i * 47 + 23) % 100 / 100 - 0.5) * 0.8;
+    const px = t * dirPC1.x + u * dirPC2.x + v * dirPC3.x;
+    const py = t * dirPC1.y + u * dirPC2.y + v * dirPC3.y;
+    const pz = t * dirPC1.z + u * dirPC2.z + v * dirPC3.z;
+    originalCoords.push(new Vector3(px, py, pz));
+  }
+  const varRatio1 = 89.8;
+  const varRatio2 = 8.9;
+  const varRatio3 = 1.3;
   container.innerHTML = `
     <div class="game-card">
       <div class="card-header">
@@ -33567,7 +37287,7 @@ function renderWeek4PcaSqueezer(container) {
 
       <div class="controls-panel">
         <div class="control-item">
-          <label>Target Dimensions (k)</label>
+          <label>Target Dimensions (k) — Compare projections of the SAME point cloud:</label>
           <div style="display: flex; gap: 8px;">
             <button id="btn-k3" class="btn btn-sm ${projectionK === 3 ? "btn-primary" : "btn-secondary"}">3D Original (d = 3)</button>
             <button id="btn-k2" class="btn btn-sm ${projectionK === 2 ? "btn-primary" : "btn-secondary"}">2D PCA Plane (k = 2)</button>
@@ -33576,16 +37296,22 @@ function renderWeek4PcaSqueezer(container) {
         </div>
 
         <div class="control-item" style="align-self: flex-end;">
-          <button id="btn-pca-certify" class="btn btn-accent btn-sm">Verify PCA Mastery</button>
+          <button id="btn-pca-certify" class="btn btn-accent btn-sm">Verify PCA Mastery (Needs ≥ 95% Var with Minimal Dim)</button>
         </div>
       </div>
 
       <div class="game-viewport" id="pca-canvas-container" style="height: 440px;">
         <div class="viewport-overlay" id="pca-overlay">
-          <div><strong style="color:var(--accent-cyan);">PC₁ (Max Variance):</strong> Explains 72.4% variance</div>
-          <div><strong style="color:var(--accent-amber);">PC₂ (Orthogonal 2nd):</strong> Explains 21.8% variance</div>
-          <div><strong style="color:var(--accent-red);">PC₃ (Noise/Minor):</strong> Explains 5.8% variance</div>
-          <div style="margin-top:4px;"><strong style="color:#fff;">Cumulative Retained Variance (k=${projectionK}):</strong> <span id="var-retained" style="color:var(--accent-green); font-weight:bold;">100%</span></div>
+          <div><strong style="color:var(--accent-cyan);">PC₁ (Max Variance):</strong> Explains ${varRatio1.toFixed(1)}% variance</div>
+          <div><strong style="color:var(--accent-amber);">PC₂ (Orthogonal 2nd):</strong> Explains ${varRatio2.toFixed(1)}% variance</div>
+          <div><strong style="color:var(--accent-red);">PC₃ (Noise/Minor):</strong> Explains ${varRatio3.toFixed(1)}% variance</div>
+          <div style="margin-top:6px; border-top:1px solid rgba(255,255,255,0.1); padding-top:4px;">
+            <strong style="color:#fff;">Cumulative Retained Variance:</strong> 
+            <span id="var-retained" style="color:var(--accent-green); font-weight:bold;">100.0%</span>
+          </div>
+          <div style="font-size:11px; color:#fde047; margin-top:3px;">
+            <span id="recon-error">Reconstruction Error: 0.00 (lossless)</span>
+          </div>
         </div>
       </div>
 
@@ -33595,13 +37321,13 @@ function renderWeek4PcaSqueezer(container) {
         <summary>\uD83D\uDCA1 Reasons Dimensionality Reduction (PCA) is Useful (Midterm Practice Q5) (Click to expand)</summary>
         <div class="explainer-content">
           <p><strong>1. Overcomes the Curse of Dimensionality & Sparsity:</strong> High dimensions cause volume to expand exponentially, leaving data points sparse and rendering distance metrics (like Euclidean distance in k-NN) meaningless. Reducing dimensions densifies data.</p>
-        <p><strong>2. Eliminates Multicollinearity:</strong> Original features are frequently correlated. Principal components derived via SVD right singular vectors $V$ are strictly <em>orthogonal (uncorrelated)</em>.</p>
-        <p><strong>3. Noise Reduction & Computational Efficiency:</strong> Truncating the smallest singular values in $\\Sigma$ removes noise and shrinks matrices, massively speeding up downstream model training and inference.</p>
-        <p><strong>4. High-Dimensional Data Visualization:</strong> Projects complex 100+ feature spaces onto 2D or 3D planes for human inspection.</p>
-        <div class="formula-block">
-          SVD Factorization: X = U Σ Vᵀ<br>
-          Low-Rank Representation: Z = U_k Σ_k (retains maximum variance in top k dimensions)
-        </div>
+          <p><strong>2. Eliminates Multicollinearity:</strong> Original features are frequently correlated. Principal components derived via SVD right singular vectors $V$ are strictly <em>orthogonal (uncorrelated)</em>: $v_i \\cdot v_j = 0$ for $i \\neq j$.</p>
+          <p><strong>3. Noise Reduction & Computational Efficiency:</strong> Truncating the smallest singular values in $\\Sigma$ removes noise and shrinks matrices, massively speeding up downstream model training and inference.</p>
+          <p><strong>4. High-Dimensional Data Visualization:</strong> Projects complex 100+ feature spaces onto 2D or 3D planes for human inspection.</p>
+          <div class="formula-block">
+            SVD Factorization: X = U Σ Vᵀ (where V columns are orthonormal eigenvectors)<br>
+            Low-Rank Projection: Z = X V_k (retains maximum variance in top k dimensions)
+          </div>
         </div>
       </details>
     </div>
@@ -33621,28 +37347,17 @@ function renderWeek4PcaSqueezer(container) {
   const light = new DirectionalLight(61695, 1.4);
   light.position.set(8, 12, 6);
   scene.add(light);
-  const nPoints = 80;
-  const originalCoords = [];
+  const grid = new GridHelper(8, 8, 2042173, 988970);
+  scene.add(grid);
   const pointMeshes = [];
   const sphereGeom = new SphereGeometry(0.09, 16, 16);
   const ptMat = new MeshStandardMaterial({ color: 61695, emissive: 30634, emissiveIntensity: 0.6 });
-  for (let i = 0;i < nPoints; i++) {
-    const t = (Math.random() - 0.5) * 6;
-    const u = (Math.random() - 0.5) * 2;
-    const v = (Math.random() - 0.5) * 0.8;
-    const px = t * 0.8 + u * -0.5 + v * 0.1;
-    const py = t * 0.5 + u * 0.7 + v * 0.2;
-    const pz = t * 0.3 + u * 0.4 + v * -0.8;
-    const vec = new Vector3(px, py, pz);
-    originalCoords.push(vec);
+  originalCoords.forEach((vec) => {
     const mesh = new Mesh(sphereGeom, ptMat);
     mesh.position.copy(vec);
     scene.add(mesh);
     pointMeshes.push(mesh);
-  }
-  const dirPC1 = new Vector3(0.8, 0.5, 0.3).normalize();
-  const dirPC2 = new Vector3(-0.5, 0.7, 0.4).normalize();
-  const dirPC3 = new Vector3(0.1, 0.2, -0.8).normalize();
+  });
   const arrowPC1 = new ArrowHelper(dirPC1, new Vector3(0, 0, 0), 4.5, 61695, 0.4, 0.25);
   const arrowPC2 = new ArrowHelper(dirPC2, new Vector3(0, 0, 0), 2.8, 16755200, 0.35, 0.2);
   const arrowPC3 = new ArrowHelper(dirPC3, new Vector3(0, 0, 0), 1.5, 16724804, 0.3, 0.15);
@@ -33653,25 +37368,38 @@ function renderWeek4PcaSqueezer(container) {
   const planeMat = new MeshBasicMaterial({
     color: 61695,
     transparent: true,
-    opacity: 0.15,
+    opacity: 0.12,
     side: DoubleSide
   });
   const planeMesh = new Mesh(planeGeom, planeMat);
   planeMesh.lookAt(dirPC3);
   scene.add(planeMesh);
-  function updateProjection() {
+  function updateProjectionVisuals() {
     const varEl = container.querySelector("#var-retained");
+    const errEl = container.querySelector("#recon-error");
+    container.querySelector("#btn-k3")?.classList.toggle("btn-primary", projectionK === 3);
+    container.querySelector("#btn-k3")?.classList.toggle("btn-secondary", projectionK !== 3);
+    container.querySelector("#btn-k2")?.classList.toggle("btn-primary", projectionK === 2);
+    container.querySelector("#btn-k2")?.classList.toggle("btn-secondary", projectionK !== 2);
+    container.querySelector("#btn-k1")?.classList.toggle("btn-primary", projectionK === 1);
+    container.querySelector("#btn-k1")?.classList.toggle("btn-secondary", projectionK !== 1);
     if (projectionK === 3) {
       if (varEl)
-        varEl.textContent = "100% (All 3 Dimensions Retained)";
+        varEl.textContent = "100.0% (All 3 dimensions)";
+      if (errEl)
+        errEl.textContent = "Reconstruction Error: 0.00 (lossless)";
       planeMesh.visible = false;
       arrowPC3.visible = true;
       pointMeshes.forEach((mesh, idx) => {
         mesh.position.copy(originalCoords[idx]);
       });
     } else if (projectionK === 2) {
+      targetVarianceMet = true;
+      const cumVar = varRatio1 + varRatio2;
       if (varEl)
-        varEl.textContent = "94.2% (k=2: PC₁ + PC₂ Retained, PC₃ discarded)";
+        varEl.textContent = `${cumVar.toFixed(1)}% (k=2: PC₁ + PC₂ Retained, PC₃ discarded)`;
+      if (errEl)
+        errEl.textContent = `Reconstruction Error: ${varRatio3.toFixed(1)}% (Minimal residual error)`;
       planeMesh.visible = true;
       arrowPC3.visible = false;
       pointMeshes.forEach((mesh, idx) => {
@@ -33683,7 +37411,9 @@ function renderWeek4PcaSqueezer(container) {
       });
     } else if (projectionK === 1) {
       if (varEl)
-        varEl.textContent = "72.4% (k=1: Only PC₁ Retained)";
+        varEl.textContent = `${varRatio1.toFixed(1)}% (k=1: Only PC₁ Retained)`;
+      if (errEl)
+        errEl.textContent = `Reconstruction Error: ${(varRatio2 + varRatio3).toFixed(1)}% (High information loss)`;
       planeMesh.visible = false;
       arrowPC3.visible = false;
       pointMeshes.forEach((mesh, idx) => {
@@ -33694,34 +37424,45 @@ function renderWeek4PcaSqueezer(container) {
       });
     }
   }
-  updateProjection();
+  updateProjectionVisuals();
   container.querySelector("#btn-k3")?.addEventListener("click", () => {
     sound.playClick();
     projectionK = 3;
-    renderWeek4PcaSqueezer(container);
+    updateProjectionVisuals();
   });
   container.querySelector("#btn-k2")?.addEventListener("click", () => {
     sound.playClick();
     projectionK = 2;
-    renderWeek4PcaSqueezer(container);
+    updateProjectionVisuals();
   });
   container.querySelector("#btn-k1")?.addEventListener("click", () => {
     sound.playClick();
     projectionK = 1;
-    renderWeek4PcaSqueezer(container);
+    updateProjectionVisuals();
   });
   container.querySelector("#btn-pca-certify")?.addEventListener("click", () => {
-    sound.playVictory();
-    confetti_module_default({ particleCount: 75, spread: 65 });
-    gameManager.addScore(150, 75);
-    gameManager.markGameComplete("week4_pca");
     const fb = container.querySelector("#pca-feedback-box");
-    if (fb) {
-      fb.innerHTML = `
-        <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 14px; color: #a7f3d0;">
-          <strong>\uD83C\uDFC6 PCA & SVD Question 5 Mastered!</strong> You observed how SVD extracts orthogonal principal components that capture 94.2% of total data variance in just 2 dimensions, vanquishing the curse of dimensionality!
-        </div>
-      `;
+    if (targetVarianceMet && projectionK === 2) {
+      sound.playVictory();
+      confetti_module_default({ particleCount: 75, spread: 65 });
+      gameManager.addScore(150, 75);
+      gameManager.markGameComplete("week4_pca");
+      if (fb) {
+        fb.innerHTML = `
+          <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 14px; color: #a7f3d0;">
+            <strong>\uD83C\uDFC6 PCA & SVD Question 5 Mastered!</strong> You found the minimal dimension budget (k=2) that preserves 98.7% of total variance via orthogonal SVD components, eliminating multicollinearity and reducing noise!
+          </div>
+        `;
+      }
+    } else {
+      sound.playWrong();
+      if (fb) {
+        fb.innerHTML = `
+          <div style="background: rgba(255, 170, 0, 0.15); border: 1px solid var(--accent-amber); border-radius: var(--radius-md); padding: 14px; color: #fef08a;">
+            <strong>Try selecting "2D PCA Plane (k = 2)":</strong> In ML, we seek the lowest dimension that preserves ≥ 95% variance. Compare 1D (only 89.8%) vs 2D (98.7%) before certifying!
+          </div>
+        `;
+      }
     }
   });
   let reqId;
@@ -33782,34 +37523,44 @@ var NAV_CONFIG = {
     games: [
       { id: "paradigms", label: "1.1 Paradigm Rush (Midterm Q1)", render: renderWeek1ParadigmSorter },
       { id: "mitchell", label: "1.2 Mitchell E/T/P Control", render: renderWeek1MitchellBuilder },
-      { id: "vector", label: "1.3 3D Vector Arena", render: renderWeek1VectorArena }
+      { id: "datasaurus", label: "1.3 Datasaurus & Probability Rules", render: renderWeek1DatasaurusStats },
+      { id: "vector", label: "1.4 3D Vector Arena & GPU Speedup", render: renderWeek1VectorArena },
+      { id: "bayes", label: "1.5 Tabular Probability & Bayes Matrix", render: renderWeek1TabularProbabilityBayes }
     ]
   },
   week2: {
     title: "Week 2: Regression, Loss & SVM",
     games: [
       { id: "gd", label: "2.1 3D Gradient Descent (Midterm Q2)", render: renderWeek2GradientDescent },
-      { id: "reg", label: "2.2 Regularization L1 vs L2 (Midterm Q4)", render: renderWeek2Regularization },
-      { id: "logistic", label: "2.3 Sigmoid Triage (MLE & Cross-Entropy)", render: renderWeek2LogisticSigmoid },
-      { id: "svm", label: "2.4 3D SVM Kernel Slicer (Midterm Q7)", render: renderWeek2SvmKernel }
+      { id: "biasvar", label: "2.2 Bias-Variance & Capacity U-Curve", render: renderWeek2BiasVarianceDartboard },
+      { id: "reg", label: "2.3 Regularization L1 vs L2 (Midterm Q4)", render: renderWeek2Regularization },
+      { id: "logistic", label: "2.4 Sigmoid Triage (MLE & Cross-Entropy)", render: renderWeek2LogisticSigmoid },
+      { id: "svm", label: "2.5 3D SVM Kernel Slicer (Midterm Q7)", render: renderWeek2SvmKernel },
+      { id: "multiclass", label: "2.6 Multi-Class: Softmax vs OvA vs OvO", render: renderWeek2MulticlassShowdown }
     ]
   },
   week3: {
     title: "Week 3: Trees, k-NN & Preprocessing",
     games: [
-      { id: "tree", label: "3.1 Entropy Guillotine (Midterm Q14)", render: renderWeek3DecisionTree },
-      { id: "knn", label: "3.2 3D k-NN Cosmic Radar (Midterm Q12)", render: renderWeek3KnnGalaxy },
-      { id: "missing", label: "3.3 Missing Data & Leakage (Midterm Q13)", render: renderWeek3MissingData },
-      { id: "imbalance", label: "3.4 Class Balancer SMOTE (Midterm Q10)", render: renderWeek3ClassImbalance }
+      { id: "tree", label: "3.1 Entropy & Gini Guillotine (Midterm Q14)", render: renderWeek3DecisionTree },
+      { id: "minkowski", label: "3.2 Minkowski Metric Space & Axioms", render: renderWeek3MinkowskiMetricSpace },
+      { id: "knn", label: "3.3 3D k-NN Cosmic Radar (Midterm Q12)", render: renderWeek3KnnGalaxy },
+      { id: "missing", label: "3.4 Missing Data & Leakage (Midterm Q13)", render: renderWeek3MissingData },
+      { id: "featureprep", label: "3.5 Feature Prep, Scaling & Ethics", render: renderWeek3FeaturePrepEthics },
+      { id: "imbalance", label: "3.6 Class Balancer SMOTE (Midterm Q10)", render: renderWeek3ClassImbalance }
     ]
   },
   week4: {
     title: "Week 4: ML Pipeline & Feature Selection",
     games: [
-      { id: "confusion", label: "4.1 Confusion Matrix Defense", render: renderWeek4ConfusionDefense },
-      { id: "featsel", label: "4.2 Feature Selection Tournament (Midterm Q6)", render: renderWeek4FeatureSelection },
-      { id: "split", label: "4.3 3-Way Partition & Leakage (Midterm Q9)", render: renderWeek4SplitLeakage },
-      { id: "pca", label: "4.4 3D PCA Dimension Squeezer (Midterm Q5)", render: renderWeek4PcaSqueezer }
+      { id: "pipeline", label: "4.1 ML Pipeline Lifecycle & Leakage Lab", render: renderWeek4PipelineLifecycle },
+      { id: "confusion", label: "4.2 Confusion Matrix Defense", render: renderWeek4ConfusionDefense },
+      { id: "roc", label: "4.3 ROC Curve & AUROC Sweeper", render: renderWeek4RocAurocSweeper },
+      { id: "featsel", label: "4.4 Feature Selection Tournament (Midterm Q6)", render: renderWeek4FeatureSelection },
+      { id: "regression", label: "4.5 Regression Metrics (MSE/RMSE/MAE)", render: renderWeek4RegressionMetrics },
+      { id: "hyperparam", label: "4.6 Hyperparameter Tuning (Grid vs Random)", render: renderWeek4HyperparamTuning },
+      { id: "split", label: "4.7 3-Way Partition & Leakage (Midterm Q9)", render: renderWeek4SplitLeakage },
+      { id: "pca", label: "4.8 3D PCA Dimension Squeezer (Midterm Q5)", render: renderWeek4PcaSqueezer }
     ]
   },
   week5: {

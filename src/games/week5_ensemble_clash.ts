@@ -218,25 +218,82 @@ export function renderWeek5EnsembleClash(container: HTMLElement) {
     const toCanvasX = (val: number) => ((val + 3.2) / 6.4) * w;
     const toCanvasY = (val: number) => h / 2 - (val / 2.8) * (h / 2);
 
-    // Draw individual bootstrap models (thin dashed faint curves - high variance)
+    interface RegTreeNode {
+      splitX?: number;
+      val?: number;
+      left?: RegTreeNode;
+      right?: RegTreeNode;
+    }
+
+    function fitTree(data: { x: number; y: number }[], depth: number, maxDepth: number): RegTreeNode {
+      if (depth >= maxDepth || data.length <= 2) {
+        const meanY = data.reduce((s, d) => s + d.y, 0) / (data.length || 1);
+        return { val: meanY };
+      }
+      let bestSplit = 0;
+      let minLoss = Infinity;
+      let bestLeft: { x: number; y: number }[] = [];
+      let bestRight: { x: number; y: number }[] = [];
+
+      for (let i = 0; i < data.length - 1; i++) {
+        const mid = (data[i]!.x + data[i + 1]!.x) / 2;
+        const left = data.filter(d => d.x <= mid);
+        const right = data.filter(d => d.x > mid);
+        if (left.length === 0 || right.length === 0) continue;
+        const mL = left.reduce((s, d) => s + d.y, 0) / left.length;
+        const mR = right.reduce((s, d) => s + d.y, 0) / right.length;
+        const loss = left.reduce((s, d) => s + (d.y - mL) ** 2, 0) + right.reduce((s, d) => s + (d.y - mR) ** 2, 0);
+        if (loss < minLoss) {
+          minLoss = loss;
+          bestSplit = mid;
+          bestLeft = left;
+          bestRight = right;
+        }
+      }
+
+      if (bestLeft.length === 0 || bestRight.length === 0) {
+        const meanY = data.reduce((s, d) => s + d.y, 0) / (data.length || 1);
+        return { val: meanY };
+      }
+
+      return {
+        splitX: bestSplit,
+        left: fitTree(bestLeft, depth + 1, maxDepth),
+        right: fitTree(bestRight, depth + 1, maxDepth)
+      };
+    }
+
+    function evalTree(node: RegTreeNode, x: number): number {
+      if (node.val !== undefined) return node.val;
+      if (x <= node.splitX!) return evalTree(node.left!, x);
+      return evalTree(node.right!, x);
+    }
+
+    // Draw individual bootstrap models (thin dashed faint step-curves - high variance)
     const curvePoints = 80;
     const xs = Array.from({ length: curvePoints }, (_, i) => -3 + (6 * i) / (curvePoints - 1));
 
-    // Simulated trees
+    // Fit genuine bootstrap regression trees (depth 3)
     const treePredictions: number[][] = [];
     for (let t = 0; t < numTrees; t++) {
-      ctx.strokeStyle = `hsla(${(t * 45) % 360}, 80%, 65%, 0.25)`;
+      ctx.strokeStyle = `hsla(${(t * 45) % 360}, 80%, 65%, 0.28)`;
       ctx.lineWidth = 1.2;
-      ctx.setLineDash([4, 4]);
+      ctx.setLineDash([3, 3]);
       ctx.beginPath();
 
-      const preds: number[] = [];
-      const phase = (t * 0.73) % 2.0;
-      const freqNoise = 1.0 + (t % 3) * 0.15;
+      // Bootstrap sample with replacement
+      const sample: { x: number; y: number }[] = [];
+      for (let i = 0; i < baggingN; i++) {
+        const pseudoRand = Math.abs(Math.sin((t + 1) * 7919 + (i + 1) * 31));
+        const idx = Math.floor(pseudoRand * baggingN) % baggingN;
+        sample.push(baggingData[idx] || baggingData[0]!);
+      }
+      sample.sort((a, b) => a.x - b.x);
+      const tree = fitTree(sample, 0, 3);
 
+      const preds: number[] = [];
       xs.forEach((xVal, idx) => {
-        // High variance individual tree overfits local regions
-        const yPred = Math.sin(xVal * freqNoise + phase) * 1.8 + Math.cos(xVal * 2.5 + t) * 0.45;
+        const yPred = evalTree(tree, xVal);
         preds.push(yPred);
 
         const cx = toCanvasX(xVal);
@@ -617,9 +674,25 @@ export function renderWeek5EnsembleClash(container: HTMLElement) {
           </div>
         ` : ''}
 
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 14px;">
-          <div id="ensemble-feedback" style="min-height: 24px; font-size: 13px;"></div>
-          <button id="btn-certify-ensemble" class="btn btn-accent">Verify Ensemble Clash Mastery</button>
+        <div style="background: rgba(10, 16, 28, 0.85); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px 18px; margin-top: 16px;">
+          <div style="font-size: 12px; font-weight: 700; color: var(--accent-amber); margin-bottom: 8px;">
+            Ensemble Mastery Checklist:
+          </div>
+          <div style="display: flex; gap: 20px; font-size: 12px; margin-bottom: 12px; flex-wrap: wrap;">
+            <span style="color: ${q11SelectedAnswer === 2 ? 'var(--accent-green)' : 'var(--text-muted)'};">
+              ${q11SelectedAnswer === 2 ? '✓' : '○'} Midterm Q11 (Exponential Loss)
+            </span>
+            <span style="color: ${adaRound >= 1 ? 'var(--accent-green)' : 'var(--text-muted)'};">
+              ${adaRound >= 1 ? '✓' : '○'} AdaBoost (Sample Re-weighting)
+            </span>
+            <span style="color: ${gbStep >= 1 ? 'var(--accent-green)' : 'var(--text-muted)'};">
+              ${gbStep >= 1 ? '✓' : '○'} Gradient Boosting (Residual Stumps)
+            </span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div id="ensemble-feedback" style="min-height: 24px; font-size: 13px;"></div>
+            <button id="btn-certify-ensemble" class="btn btn-accent">Verify Ensemble Clash Mastery</button>
+          </div>
         </div>
 
         <!-- Academic Explainer Card -->
@@ -745,7 +818,11 @@ export function renderWeek5EnsembleClash(container: HTMLElement) {
     // Certify button
     container.querySelector('#btn-certify-ensemble')?.addEventListener('click', () => {
       const fb = container.querySelector('#ensemble-feedback');
-      if (q11SelectedAnswer === 2 || gbStep >= 1 || adaRound >= 1) {
+      const hasQ11 = q11SelectedAnswer === 2;
+      const hasAda = adaRound >= 1;
+      const hasGb = gbStep >= 1;
+
+      if (hasQ11 && hasAda && hasGb) {
         sound.playVictory();
         confetti({ particleCount: 80, spread: 70 });
         gameManager.addScore(150, 75);
@@ -761,10 +838,15 @@ export function renderWeek5EnsembleClash(container: HTMLElement) {
         }
       } else {
         sound.playWrong();
+        const missing: string[] = [];
+        if (!hasQ11) missing.push('Submit correct answer for Midterm Q11');
+        if (!hasAda) missing.push('Run at least 1 AdaBoost round');
+        if (!hasGb) missing.push('Step through Gradient Boosting (Learner 1 / 2)');
+
         if (fb) {
           fb.innerHTML = `
             <div style="background: rgba(255, 170, 0, 0.15); border: 1px solid var(--accent-amber); border-radius: var(--radius-md); padding: 12px; color: #fef08a;">
-              <strong>Keep Exploring:</strong> Answer Midterm Q11 or step through AdaBoost / Gradient Boosting to verify mastery!
+              <strong>Remaining to certify:</strong> ${missing.join(' • ')}
             </div>
           `;
         }

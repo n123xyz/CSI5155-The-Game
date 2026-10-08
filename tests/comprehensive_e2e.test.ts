@@ -52,6 +52,17 @@ async function run() {
     await page.waitForTimeout(800);
     await page.screenshot({ path: 'screenshots/04_week1_vector_3d.png' });
 
+    // 4b. Week 1: Datasaurus Dozen
+    console.log('📸 4b. Week 1: Datasaurus Dozen...');
+    await page.goto(`${baseUrl}/#week1:datasaurus`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(600);
+    const starBtn = page.locator('button[data-shape="star"]');
+    if (await starBtn.isVisible()) {
+      await starBtn.click();
+      await page.waitForTimeout(200);
+    }
+    await page.screenshot({ path: 'screenshots/04b_week1_datasaurus.png' });
+
     // 5. Week 2: 3D Gradient Descent
     console.log('📸 5. Week 2: 3D Gradient Descent Marble Run...');
     await page.goto(`${baseUrl}/#week2:gd`, { waitUntil: 'networkidle' });
@@ -63,6 +74,17 @@ async function run() {
       await gdStep.click();
     }
     await page.screenshot({ path: 'screenshots/05_week2_gd_3d.png' });
+
+    // 5b. Week 2: Bias-Variance Decomposition
+    console.log('📸 5b. Week 2: Bias-Variance Decomposition...');
+    await page.goto(`${baseUrl}/#week2:biasvar`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(600);
+    const step2Btn = page.locator('.step-dot[data-step="2"]');
+    if (await step2Btn.isVisible()) {
+      await step2Btn.click();
+      await page.waitForTimeout(300);
+    }
+    await page.screenshot({ path: 'screenshots/05b_week2_bias_variance.png' });
 
     // 6. Week 2: Regularization L1 vs L2
     console.log('📸 6. Week 2: Regularization Gauntlet...');
@@ -92,6 +114,12 @@ async function run() {
     await page.waitForTimeout(800);
     await page.screenshot({ path: 'screenshots/08_week2_svm_3d.png' });
 
+    // 8b. Week 2: Multi-Class Showdown
+    console.log('📸 8b. Week 2: Multi-Class Showdown...');
+    await page.goto(`${baseUrl}/#week2:multiclass`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: 'screenshots/08b_week2_multiclass.png' });
+
     // 9. Week 3: Decision Tree Entropy Slicer
     console.log('📸 9. Week 3: Decision Tree Entropy Guillotine...');
     await page.goto(`${baseUrl}/#week3:tree`, { waitUntil: 'networkidle' });
@@ -102,6 +130,12 @@ async function run() {
       await page.waitForTimeout(300);
     }
     await page.screenshot({ path: 'screenshots/09_week3_decision_tree.png' });
+
+    // 9b. Week 3: Minkowski Metric Spaces
+    console.log('📸 9b. Week 3: Minkowski Metric Spaces...');
+    await page.goto(`${baseUrl}/#week3:minkowski`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: 'screenshots/09b_week3_minkowski.png' });
 
     // 10. Week 3: 3D k-NN Cosmic Radar
     console.log('📸 10. Week 3: 3D k-NN Cosmic Radar...');
@@ -125,6 +159,12 @@ async function run() {
     }
     await page.screenshot({ path: 'screenshots/11_week3_missing_data.png' });
 
+    // 11b. Week 3: Feature Prep & Ethics
+    console.log('📸 11b. Week 3: Feature Prep & Ethics...');
+    await page.goto(`${baseUrl}/#week3:featureprep`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: 'screenshots/11b_week3_featureprep.png' });
+
     // 12. Week 3: Class Imbalance
     console.log('📸 12. Week 3: Class Balancer SMOTE...');
     await page.goto(`${baseUrl}/#week3:imbalance`, { waitUntil: 'networkidle' });
@@ -136,17 +176,46 @@ async function run() {
     }
     await page.screenshot({ path: 'screenshots/12_week3_class_imbalance.png' });
 
-    // 13. Week 4: Confusion Matrix Defense
-    console.log('📸 13. Week 4: Confusion Matrix Defense...');
+    // 13. Week 4: ML Pipeline Lifecycle
+    console.log('📸 13. Week 4: ML Pipeline Lifecycle...');
+    await page.goto(`${baseUrl}/#week4:pipeline`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: 'screenshots/13_week4_pipeline.png' });
+
+    // 13b. Week 4: Confusion Matrix Defense
+    console.log('📸 13b. Week 4: Confusion Matrix Defense...');
     await page.goto(`${baseUrl}/#week4:confusion`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(600);
-    await page.screenshot({ path: 'screenshots/13_week4_confusion_defense.png' });
+    await page.screenshot({ path: 'screenshots/13b_week4_confusion_defense.png' });
+
+    // 13c. Week 4: ROC & AUROC Sweeper
+    console.log('📸 13c. Week 4: ROC & AUROC Sweeper...');
+    await page.goto(`${baseUrl}/#week4:roc`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: 'screenshots/13c_week4_roc.png' });
 
     // 14. Week 4: Feature Selection
     console.log('📸 14. Week 4: Feature Selection Tournament...');
     await page.goto(`${baseUrl}/#week4:featsel`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(600);
     await page.screenshot({ path: 'screenshots/14_week4_feature_selection.png' });
+
+    // 14b. Week 4: Regression Metrics Lab
+    console.log('📸 14b. Week 4: Regression Metrics Lab...');
+    await page.goto(`${baseUrl}/#week4:regression`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: 'screenshots/14b_week4_regression.png' });
+
+    // 14c. Week 4: Hyperparameter Tuning Race
+    console.log('📸 14c. Week 4: Hyperparameter Tuning Race...');
+    await page.goto(`${baseUrl}/#week4:hyperparam`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(600);
+    const randBtn = page.locator('button[data-mode="random"]');
+    if (await randBtn.isVisible()) {
+      await randBtn.click();
+      await page.waitForTimeout(300);
+    }
+    await page.screenshot({ path: 'screenshots/14c_week4_hyperparam.png' });
 
     // 15. Week 4: Split & Leakage
     console.log('📸 15. Week 4: 3-Way Split & Leakage Gauntlet...');

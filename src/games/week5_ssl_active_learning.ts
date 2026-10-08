@@ -839,15 +839,24 @@ export function renderWeek5SslActiveLearning(container: HTMLElement) {
       sample.queried = true;
       queryBudget--;
       queriesUsed++;
-      alAccuracy = Math.min(96.5, alAccuracy + 6.8);
+
+      // Information Gain proportional to sample Shannon Entropy
+      // Max entropy for 3 classes is log2(3) ≈ 1.585
+      const ent = calcEntropy(sample);
+      const boost = Math.max(1.0, parseFloat((ent * 5.2).toFixed(1)));
+      alAccuracy = Math.min(96.5, alAccuracy + boost);
       render();
 
       const fb = container.querySelector('#ssl-feedback');
       if (fb) {
+        const isHighGain = ent >= 1.2;
         fb.innerHTML = `
-          <span style="color:var(--accent-green); font-weight:bold;">
-            Oracle Label Acquired for ${sample.name}! Ground truth is Class ${sample.trueClass}. Accuracy boosted to ${alAccuracy.toFixed(1)}%!
-          </span>
+          <div style="background: ${isHighGain ? 'rgba(0, 255, 136, 0.15)' : 'rgba(255, 170, 0, 0.15)'}; border: 1px solid ${isHighGain ? 'var(--accent-green)' : 'var(--accent-amber)'}; border-radius: var(--radius-md); padding: 10px 14px; margin-top: 8px;">
+            <strong>${isHighGain ? '🔥 High Information Gain' : '⚠️ Low Information Gain'} (+${boost.toFixed(1)}% Acc):</strong> 
+            Oracle labeled ${sample.name} as Class ${sample.trueClass} (Entropy H = ${ent.toFixed(2)}). 
+            ${isHighGain ? 'Boundary uncertainty resolved!' : 'Sample was already confident; minimal knowledge gained.'}
+            Model accuracy now: <strong>${alAccuracy.toFixed(1)}%</strong>.
+          </div>
         `;
       }
     }
@@ -881,7 +890,10 @@ export function renderWeek5SslActiveLearning(container: HTMLElement) {
     // Certification button
     container.querySelector('#btn-ssl-certify')?.addEventListener('click', () => {
       const fb = container.querySelector('#ssl-feedback');
-      if (queriesUsed >= 3 || labeledCount >= 10) {
+      const alQualified = queriesUsed >= 2 && alAccuracy >= 74.0;
+      const sslQualified = wrapperIteration >= 1 || labeledCount >= 8;
+
+      if (alQualified || sslQualified) {
         sound.playVictory();
         confetti({ particleCount: 80, spread: 70 });
         gameManager.addScore(150, 75);
@@ -889,7 +901,7 @@ export function renderWeek5SslActiveLearning(container: HTMLElement) {
 
         if (fb) {
           fb.innerHTML = `
-            <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 12px; color: #a7f3d0;">
+            <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 12px; color: #a7f3d0; margin-top: 8px;">
               <strong>🎉 Semi-Supervised & Active Learning Mastery Certified!</strong> 
               You mastered the 3 SSL Assumptions, Wrapper Methods, and Oracle Uncertainty Sampling (Least Confident, Margin, Entropy)! +150 Score awarded.
             </div>
@@ -899,8 +911,8 @@ export function renderWeek5SslActiveLearning(container: HTMLElement) {
         sound.playWrong();
         if (fb) {
           fb.innerHTML = `
-            <div style="background: rgba(255, 170, 0, 0.15); border: 1px solid var(--accent-amber); border-radius: var(--radius-md); padding: 12px; color: #fef08a;">
-              <strong>Keep Exploring:</strong> Query at least 3 Oracle samples in Active Learning or run Label Propagation / Wrapper iterations to verify!
+            <div style="background: rgba(255, 170, 0, 0.15); border: 1px solid var(--accent-amber); border-radius: var(--radius-md); padding: 12px; color: #fef08a; margin-top: 8px;">
+              <strong>Keep Exploring:</strong> Query informative high-entropy samples in Active Learning to reach ≥ 74% accuracy, or run Semi-Supervised Wrapper iterations!
             </div>
           `;
         }

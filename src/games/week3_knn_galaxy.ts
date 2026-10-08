@@ -24,6 +24,8 @@ export function renderWeek3KnnGalaxy(container: HTMLElement) {
   let k = 1;
   let testPoint = { f1: 2.0, f2: 1.0 }; // exact Midterm Q12 test point x*
   let metric: 'euclidean' | 'manhattan' | 'cosine' = 'euclidean';
+  let predK1: 'A' | 'B' | null = null;
+  let predK3: 'A' | 'B' | null = null;
 
   function calcDistance(p: PointData, tp: { f1: number; f2: number }, currentMetric: string) {
     if (currentMetric === 'manhattan') {
@@ -119,9 +121,26 @@ export function renderWeek3KnnGalaxy(container: HTMLElement) {
               }).join('')}
             </div>
 
-            <div style="margin-top: 18px;">
+            <div style="margin-top: 18px; border-top: 1px solid var(--border-color); padding-top: 14px;">
+              <div style="font-size: 12px; font-weight: 700; color: var(--accent-amber); margin-bottom: 8px;">
+                📝 Midterm Q12 Prediction Check:
+              </div>
+              <div style="margin-bottom: 10px;">
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">Part (a) When k = 1, x* is:</div>
+                <div style="display: flex; gap: 8px;">
+                  <button id="btn-pred-k1-a" class="btn btn-sm ${predK1 === 'A' ? 'btn-primary' : 'btn-secondary'}" style="flex: 1;">Class A</button>
+                  <button id="btn-pred-k1-b" class="btn btn-sm ${predK1 === 'B' ? 'btn-primary' : 'btn-secondary'}" style="flex: 1;">Class B</button>
+                </div>
+              </div>
+              <div style="margin-bottom: 14px;">
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">Part (b) When k = 3, x* is:</div>
+                <div style="display: flex; gap: 8px;">
+                  <button id="btn-pred-k3-a" class="btn btn-sm ${predK3 === 'A' ? 'btn-primary' : 'btn-secondary'}" style="flex: 1;">Class A</button>
+                  <button id="btn-pred-k3-b" class="btn btn-sm ${predK3 === 'B' ? 'btn-primary' : 'btn-secondary'}" style="flex: 1;">Class B</button>
+                </div>
+              </div>
               <button id="btn-submit-exam-k" class="btn btn-primary" style="width: 100%;">
-                Verify Midterm Q12 Choice
+                Verify Midterm Q12 Answers
               </button>
             </div>
           </div>
@@ -179,20 +198,74 @@ export function renderWeek3KnnGalaxy(container: HTMLElement) {
       renderUI();
     });
 
-    container.querySelector('#btn-submit-exam-k')?.addEventListener('click', () => {
-      sound.playVictory();
-      confetti({ particleCount: 70, spread: 60 });
-      gameManager.addScore(150, 75);
-      gameManager.markGameComplete('week3_knn');
+    container.querySelector('#btn-pred-k1-a')?.addEventListener('click', () => {
+      sound.playClick();
+      predK1 = 'A';
+      renderUI();
+    });
 
+    container.querySelector('#btn-pred-k1-b')?.addEventListener('click', () => {
+      sound.playClick();
+      predK1 = 'B';
+      renderUI();
+    });
+
+    container.querySelector('#btn-pred-k3-a')?.addEventListener('click', () => {
+      sound.playClick();
+      predK3 = 'A';
+      renderUI();
+    });
+
+    container.querySelector('#btn-pred-k3-b')?.addEventListener('click', () => {
+      sound.playClick();
+      predK3 = 'B';
+      renderUI();
+    });
+
+    container.querySelector('#btn-submit-exam-k')?.addEventListener('click', () => {
       const fb = container.querySelector('#knn-feedback-box') as HTMLElement;
-      if (fb) {
-        fb.innerHTML = `
-          <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 16px; color: #a7f3d0; margin-bottom: 16px;">
-            <h3 style="font-size: 15px; margin-bottom: 6px;">🎉 Midterm Question 12 Mastery Verified!</h3>
-            <p>You proved why <strong>k=1 selects Label A</strong> (via x₂), and <strong>k=3 flips to Label B</strong> (via majority vote of x₂, x₃, x₅)!</p>
-          </div>
-        `;
+      if (!predK1 || !predK3) {
+        sound.playWrong();
+        if (fb) {
+          fb.innerHTML = `
+            <div style="background: rgba(255, 170, 0, 0.15); border: 1px solid var(--accent-amber); border-radius: var(--radius-md); padding: 14px; color: #fef08a; margin-bottom: 16px;">
+              ⚠️ <strong>Incomplete Prediction:</strong> Please select an answer for both Part (a) [k=1] and Part (b) [k=3] before verifying!
+            </div>
+          `;
+        }
+        return;
+      }
+
+      if (predK1 === 'A' && predK3 === 'B') {
+        sound.playVictory();
+        confetti({ particleCount: 70, spread: 60 });
+        gameManager.addScore(150, 75);
+        gameManager.markGameComplete('week3_knn');
+
+        if (fb) {
+          fb.innerHTML = `
+            <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 16px; color: #a7f3d0; margin-bottom: 16px;">
+              <h3 style="font-size: 15px; margin-bottom: 6px;">🎉 Midterm Question 12 Mastery Verified! (+150 Score)</h3>
+              <p>100% Correct! <strong>k=1 chooses Label A</strong> (x₂ is distance 1.0 away, while closest B is distance 2.0). <strong>k=3 chooses Label B</strong> because the three nearest neighbors are x₂ (A, dist 1), x₃ (B, dist 2), and x₅ (B, dist 2), yielding 2 votes for B vs 1 vote for A!</p>
+            </div>
+          `;
+        }
+      } else {
+        sound.playWrong();
+        let reason = '';
+        if (predK1 !== 'A') {
+          reason += '• For k=1, the nearest neighbor is x₂ (label A) at distance 1.0. ';
+        }
+        if (predK3 !== 'B') {
+          reason += '• For k=3, the 3 nearest neighbors are x₂ (A, d=1.0), x₃ (B, d=2.0), and x₅ (B, d=2.0), so Class B wins the majority vote 2 to 1.';
+        }
+        if (fb) {
+          fb.innerHTML = `
+            <div style="background: rgba(255, 51, 68, 0.15); border: 1px solid var(--accent-red); border-radius: var(--radius-md); padding: 14px; color: #fca5a5; margin-bottom: 16px;">
+              ❌ <strong>Incorrect Prediction:</strong> ${reason} Inspect the distance leaderboard above and try again!
+            </div>
+          `;
+        }
       }
     });
   }

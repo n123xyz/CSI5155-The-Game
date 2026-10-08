@@ -4,23 +4,33 @@ import { sound } from './audio/sound';
 // Week 1 Games
 import { renderWeek1ParadigmSorter } from './games/week1_paradigm_sorter';
 import { renderWeek1MitchellBuilder } from './games/week1_mitchell_builder';
+import { renderWeek1DatasaurusStats } from './games/week1_datasaurus_stats';
 import { renderWeek1VectorArena } from './games/week1_vector_arena';
+import { renderWeek1TabularProbabilityBayes } from './games/week1_tabular_probability_bayes';
 
 // Week 2 Games
 import { renderWeek2GradientDescent } from './games/week2_gradient_descent';
+import { renderWeek2BiasVarianceDartboard } from './games/week2_bias_variance_dartboard';
 import { renderWeek2Regularization } from './games/week2_regularization';
 import { renderWeek2LogisticSigmoid } from './games/week2_logistic_sigmoid';
 import { renderWeek2SvmKernel } from './games/week2_svm_kernel';
+import { renderWeek2MulticlassShowdown } from './games/week2_multiclass_showdown';
 
 // Week 3 Games
 import { renderWeek3DecisionTree } from './games/week3_decision_tree';
+import { renderWeek3MinkowskiMetricSpace } from './games/week3_minkowski_metric_space';
 import { renderWeek3KnnGalaxy } from './games/week3_knn_galaxy';
 import { renderWeek3MissingData } from './games/week3_missing_data';
+import { renderWeek3FeaturePrepEthics } from './games/week3_feature_prep_ethics';
 import { renderWeek3ClassImbalance } from './games/week3_class_imbalance';
 
 // Week 4 Games
+import { renderWeek4PipelineLifecycle } from './games/week4_pipeline_lifecycle';
 import { renderWeek4ConfusionDefense } from './games/week4_confusion_defense';
+import { renderWeek4RocAurocSweeper } from './games/week4_roc_auroc_sweeper';
 import { renderWeek4FeatureSelection } from './games/week4_feature_selection';
+import { renderWeek4RegressionMetrics } from './games/week4_regression_metrics';
+import { renderWeek4HyperparamTuning } from './games/week4_hyperparam_tuning';
 import { renderWeek4SplitLeakage } from './games/week4_split_leakage';
 import { renderWeek4PcaSqueezer } from './games/week4_pca_squeezer';
 
@@ -60,34 +70,44 @@ const NAV_CONFIG: Record<string, { title: string; games: { id: string; label: st
     games: [
       { id: 'paradigms', label: '1.1 Paradigm Rush (Midterm Q1)', render: renderWeek1ParadigmSorter },
       { id: 'mitchell', label: '1.2 Mitchell E/T/P Control', render: renderWeek1MitchellBuilder },
-      { id: 'vector', label: '1.3 3D Vector Arena', render: renderWeek1VectorArena }
+      { id: 'datasaurus', label: '1.3 Datasaurus & Probability Rules', render: renderWeek1DatasaurusStats },
+      { id: 'vector', label: '1.4 3D Vector Arena & GPU Speedup', render: renderWeek1VectorArena },
+      { id: 'bayes', label: '1.5 Tabular Probability & Bayes Matrix', render: renderWeek1TabularProbabilityBayes }
     ]
   },
   week2: {
     title: 'Week 2: Regression, Loss & SVM',
     games: [
       { id: 'gd', label: '2.1 3D Gradient Descent (Midterm Q2)', render: renderWeek2GradientDescent },
-      { id: 'reg', label: '2.2 Regularization L1 vs L2 (Midterm Q4)', render: renderWeek2Regularization },
-      { id: 'logistic', label: '2.3 Sigmoid Triage (MLE & Cross-Entropy)', render: renderWeek2LogisticSigmoid },
-      { id: 'svm', label: '2.4 3D SVM Kernel Slicer (Midterm Q7)', render: renderWeek2SvmKernel }
+      { id: 'biasvar', label: '2.2 Bias-Variance & Capacity U-Curve', render: renderWeek2BiasVarianceDartboard },
+      { id: 'reg', label: '2.3 Regularization L1 vs L2 (Midterm Q4)', render: renderWeek2Regularization },
+      { id: 'logistic', label: '2.4 Sigmoid Triage (MLE & Cross-Entropy)', render: renderWeek2LogisticSigmoid },
+      { id: 'svm', label: '2.5 3D SVM Kernel Slicer (Midterm Q7)', render: renderWeek2SvmKernel },
+      { id: 'multiclass', label: '2.6 Multi-Class: Softmax vs OvA vs OvO', render: renderWeek2MulticlassShowdown }
     ]
   },
   week3: {
     title: 'Week 3: Trees, k-NN & Preprocessing',
     games: [
-      { id: 'tree', label: '3.1 Entropy Guillotine (Midterm Q14)', render: renderWeek3DecisionTree },
-      { id: 'knn', label: '3.2 3D k-NN Cosmic Radar (Midterm Q12)', render: renderWeek3KnnGalaxy },
-      { id: 'missing', label: '3.3 Missing Data & Leakage (Midterm Q13)', render: renderWeek3MissingData },
-      { id: 'imbalance', label: '3.4 Class Balancer SMOTE (Midterm Q10)', render: renderWeek3ClassImbalance }
+      { id: 'tree', label: '3.1 Entropy & Gini Guillotine (Midterm Q14)', render: renderWeek3DecisionTree },
+      { id: 'minkowski', label: '3.2 Minkowski Metric Space & Axioms', render: renderWeek3MinkowskiMetricSpace },
+      { id: 'knn', label: '3.3 3D k-NN Cosmic Radar (Midterm Q12)', render: renderWeek3KnnGalaxy },
+      { id: 'missing', label: '3.4 Missing Data & Leakage (Midterm Q13)', render: renderWeek3MissingData },
+      { id: 'featureprep', label: '3.5 Feature Prep, Scaling & Ethics', render: renderWeek3FeaturePrepEthics },
+      { id: 'imbalance', label: '3.6 Class Balancer SMOTE (Midterm Q10)', render: renderWeek3ClassImbalance }
     ]
   },
   week4: {
     title: 'Week 4: ML Pipeline & Feature Selection',
     games: [
-      { id: 'confusion', label: '4.1 Confusion Matrix Defense', render: renderWeek4ConfusionDefense },
-      { id: 'featsel', label: '4.2 Feature Selection Tournament (Midterm Q6)', render: renderWeek4FeatureSelection },
-      { id: 'split', label: '4.3 3-Way Partition & Leakage (Midterm Q9)', render: renderWeek4SplitLeakage },
-      { id: 'pca', label: '4.4 3D PCA Dimension Squeezer (Midterm Q5)', render: renderWeek4PcaSqueezer }
+      { id: 'pipeline', label: '4.1 ML Pipeline Lifecycle & Leakage Lab', render: renderWeek4PipelineLifecycle },
+      { id: 'confusion', label: '4.2 Confusion Matrix Defense', render: renderWeek4ConfusionDefense },
+      { id: 'roc', label: '4.3 ROC Curve & AUROC Sweeper', render: renderWeek4RocAurocSweeper },
+      { id: 'featsel', label: '4.4 Feature Selection Tournament (Midterm Q6)', render: renderWeek4FeatureSelection },
+      { id: 'regression', label: '4.5 Regression Metrics (MSE/RMSE/MAE)', render: renderWeek4RegressionMetrics },
+      { id: 'hyperparam', label: '4.6 Hyperparameter Tuning (Grid vs Random)', render: renderWeek4HyperparamTuning },
+      { id: 'split', label: '4.7 3-Way Partition & Leakage (Midterm Q9)', render: renderWeek4SplitLeakage },
+      { id: 'pca', label: '4.8 3D PCA Dimension Squeezer (Midterm Q5)', render: renderWeek4PcaSqueezer }
     ]
   },
   week5: {

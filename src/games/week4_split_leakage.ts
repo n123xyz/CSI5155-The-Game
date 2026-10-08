@@ -54,16 +54,29 @@ export function renderWeek4SplitLeakage(container: HTMLElement) {
 
   function render() {
     if (activeScenarioIdx >= LEAKAGE_SCENARIOS.length) {
-      sound.playVictory();
-      confetti({ particleCount: 75, spread: 65 });
-      gameManager.markGameComplete('week4_split');
-      container.innerHTML = `
-        <div class="game-card">
-          <h2>🏆 Data Partition & Leakage Protocol Mastered!</h2>
-          <p style="margin: 16px 0; color: var(--text-secondary);">You scored <strong>${correctCount} / ${LEAKAGE_SCENARIOS.length}</strong> on data leakage defense! You are fully prepped for <strong>Midterm Question 9</strong>.</p>
-          <button id="btn-replay-split" class="btn btn-primary">Replay Protocol Audit</button>
-        </div>
-      `;
+      const passed = correctCount >= 4;
+      if (passed) {
+        sound.playVictory();
+        confetti({ particleCount: 75, spread: 65 });
+        gameManager.markGameComplete('week4_split');
+        container.innerHTML = `
+          <div class="game-card">
+            <h2>🏆 Data Partition & Leakage Protocol Mastered!</h2>
+            <p style="margin: 16px 0; color: #a7f3d0;">Outstanding! You scored <strong>${correctCount} / ${LEAKAGE_SCENARIOS.length}</strong> on data leakage defense! You are fully prepped for <strong>Midterm Question 9</strong>.</p>
+            <button id="btn-replay-split" class="btn btn-primary">Replay Protocol Audit</button>
+          </div>
+        `;
+      } else {
+        sound.playWrong();
+        container.innerHTML = `
+          <div class="game-card">
+            <h2 style="color: var(--accent-amber);">⚠️ Protocol Audit Incomplete</h2>
+            <p style="margin: 16px 0; color: #fca5a5;">You scored <strong>${correctCount} / ${LEAKAGE_SCENARIOS.length}</strong>. A minimum of <strong>4 / 5</strong> correct audits is required to earn the Leakage Defense badge.</p>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">Remember: Test data must never inform scaling, feature selection, or SMOTE synthesis!</p>
+            <button id="btn-replay-split" class="btn btn-primary">Retry Gauntlet</button>
+          </div>
+        `;
+      }
       container.querySelector('#btn-replay-split')?.addEventListener('click', () => {
         activeScenarioIdx = 0;
         correctCount = 0;

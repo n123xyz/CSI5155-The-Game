@@ -217,7 +217,7 @@ export function renderWeek4ConfusionDefense(container: HTMLElement) {
         sound.playWrong();
         fb.innerHTML = `
           <div style="background: rgba(255, 170, 0, 0.15); border: 1px solid var(--accent-amber); border-radius: var(--radius-md); padding: 14px; color: #fef08a;">
-            <strong>F1 is ${(cur.f1 * 100).toFixed(1)}%:</strong> Slide the threshold closer to 0.45 ~ 0.55 to maximize harmonic balance between Precision and Recall!
+            <strong>F1 is ${(cur.f1 * 100).toFixed(1)}%:</strong> Slide the threshold down closer to <strong>0.30 ~ 0.35</strong> (where F1 reaches maximum 78.3%) to reduce False Negatives without destroying Precision!
           </div>
         `;
       }
