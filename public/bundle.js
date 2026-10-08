@@ -29598,14 +29598,14 @@ function renderMidtermMasterExam(container) {
             </div>
 
             <div class="quiz-options">
-              <label class="quiz-option-btn ${userAnswers.q5_reasons.includes("curse_of_dim") ? "selected" : ""}" style="display: flex; gap: 12px; align-items: flex-start; cursor: pointer;">
+              <label class="quiz-option-btn ${userAnswers.q5_reasons.includes("curse_of_dim") ? "selected" : ""}" data-correct="true" style="display: flex; gap: 12px; align-items: flex-start; cursor: pointer;">
                 <input type="checkbox" class="q5-check" value="curse_of_dim" ${userAnswers.q5_reasons.includes("curse_of_dim") ? "checked" : ""} style="margin-top: 4px;">
                 <div>
                   <strong>1. Overcomes the Curse of Dimensionality:</strong> High-dimensional spaces become exponentially sparse, causing distance metrics (e.g. Euclidean in k-NN/K-Means) to lose contrast and models to overfit.
                 </div>
               </label>
 
-              <label class="quiz-option-btn ${userAnswers.q5_reasons.includes("multicollinearity") ? "selected" : ""}" style="display: flex; gap: 12px; align-items: flex-start; cursor: pointer;">
+              <label class="quiz-option-btn ${userAnswers.q5_reasons.includes("multicollinearity") ? "selected" : ""}" data-correct="true" style="display: flex; gap: 12px; align-items: flex-start; cursor: pointer;">
                 <input type="checkbox" class="q5-check" value="multicollinearity" ${userAnswers.q5_reasons.includes("multicollinearity") ? "checked" : ""} style="margin-top: 4px;">
                 <div>
                   <strong>2. Eliminates Multicollinearity:</strong> Projects features onto orthogonal principal axes with zero covariance (Cov(Z<sub>i</sub>, Z<sub>j</sub>) = 0), stabilizing linear models.
@@ -44791,6 +44791,37 @@ function renderMath(root) {
   });
 }
 
+// src/quiz-options.ts
+function isCorrectOption(option) {
+  const value = option.dataset.val ?? "";
+  return option.dataset.correct === "true" || value === "correct" || value.endsWith("_correct");
+}
+function shuffleGroup(group) {
+  if (group.dataset.optionsShuffled === "true")
+    return;
+  group.dataset.optionsShuffled = "true";
+  const options = [...group.children].filter((element) => element instanceof HTMLElement && element.matches(".quiz-option-btn"));
+  if (options.length < 2)
+    return;
+  for (let index = options.length - 1;index > 0; index--) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [options[index], options[swapIndex]] = [options[swapIndex], options[index]];
+  }
+  if (isCorrectOption(options[0])) {
+    const firstIncorrectIndex = options.findIndex((option) => !isCorrectOption(option));
+    if (firstIncorrectIndex > 0) {
+      [options[0], options[firstIncorrectIndex]] = [options[firstIncorrectIndex], options[0]];
+    }
+  }
+  options.forEach((option) => group.appendChild(option));
+}
+function shuffleQuizOptions(root) {
+  const group = root.matches(".quiz-options") ? root : root.closest(".quiz-options");
+  if (group)
+    shuffleGroup(group);
+  root.querySelectorAll(".quiz-options").forEach(shuffleGroup);
+}
+
 // src/games/week1_paradigm_sorter.ts
 init_state();
 init_sound();
@@ -52142,13 +52173,17 @@ window.addEventListener("DOMContentLoaded", async () => {
         continue;
       const addedElements = [...mutation.addedNodes].filter((node) => node instanceof HTMLElement);
       if (addedElements.length) {
-        addedElements.forEach((node) => renderMath(node));
+        addedElements.forEach((node) => {
+          shuffleQuizOptions(node);
+          renderMath(node);
+        });
       } else if (target.matches(".formula-block, p, li, label")) {
         renderMath(target);
       }
     }
   });
   mathObserver.observe(mainContent, { childList: true, subtree: true });
+  shuffleQuizOptions(mainContent);
   renderMath(mainContent);
   function parseHash() {
     if (window.location.hash) {

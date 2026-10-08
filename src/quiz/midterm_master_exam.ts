@@ -703,14 +703,14 @@ export function renderMidtermMasterExam(container: HTMLElement) {
             </div>
 
             <div class="quiz-options">
-              <label class="quiz-option-btn ${userAnswers.q5_reasons.includes('curse_of_dim') ? 'selected' : ''}" style="display: flex; gap: 12px; align-items: flex-start; cursor: pointer;">
+              <label class="quiz-option-btn ${userAnswers.q5_reasons.includes('curse_of_dim') ? 'selected' : ''}" data-correct="true" style="display: flex; gap: 12px; align-items: flex-start; cursor: pointer;">
                 <input type="checkbox" class="q5-check" value="curse_of_dim" ${userAnswers.q5_reasons.includes('curse_of_dim') ? 'checked' : ''} style="margin-top: 4px;">
                 <div>
                   <strong>1. Overcomes the Curse of Dimensionality:</strong> High-dimensional spaces become exponentially sparse, causing distance metrics (e.g. Euclidean in k-NN/K-Means) to lose contrast and models to overfit.
                 </div>
               </label>
 
-              <label class="quiz-option-btn ${userAnswers.q5_reasons.includes('multicollinearity') ? 'selected' : ''}" style="display: flex; gap: 12px; align-items: flex-start; cursor: pointer;">
+              <label class="quiz-option-btn ${userAnswers.q5_reasons.includes('multicollinearity') ? 'selected' : ''}" data-correct="true" style="display: flex; gap: 12px; align-items: flex-start; cursor: pointer;">
                 <input type="checkbox" class="q5-check" value="multicollinearity" ${userAnswers.q5_reasons.includes('multicollinearity') ? 'checked' : ''} style="margin-top: 4px;">
                 <div>
                   <strong>2. Eliminates Multicollinearity:</strong> Projects features onto orthogonal principal axes with zero covariance (Cov(Z<sub>i</sub>, Z<sub>j</sub>) = 0), stabilizing linear models.
