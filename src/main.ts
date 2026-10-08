@@ -389,6 +389,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Restore and display the saved sound preference.
   sound.enabled = gameManager.getState().soundEnabled;
+  window.addEventListener('pointerdown', () => sound.startMusic(), { once: true });
+  window.addEventListener('keydown', () => sound.startMusic(), { once: true });
   const soundToggle = document.getElementById('btn-sound-toggle');
   if (soundToggle) soundToggle.textContent = sound.enabled ? '🔊' : '🔇';
   soundToggle?.addEventListener('click', (e) => {

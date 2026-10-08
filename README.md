@@ -32,9 +32,10 @@ An interactive study game for learning and reviewing machine-learning concepts f
 - **Five weeks of course material:** foundations and learning paradigms; regression, optimization, and SVMs; decision trees, k-NN, and data preparation; evaluation, pipelines, feature selection, and PCA; clustering, semi-supervised learning, and ensembles.
 - **Interactive visual lessons:** manipulate thresholds, parameters, points, centroids, and other controls to see how a method behaves.
 - **Visual and 3D simulations:** explore concepts such as gradient descent, clustering, vector geometry, and decision boundaries.
-- **Before-and-after weekly flashcards:** complete a week’s flashcard deck before its lessons, then repeat it after marking every lesson task complete. The 64 weekly cards come from `public/flashcards.md`; progress and card ratings are saved in the browser.
+- **Before-and-after weekly flashcards:** complete a week’s flashcard deck before its lessons, then repeat it whenever you’re ready. The 64 weekly cards come from `public/flashcards.md`; progress and card ratings are saved in the browser.
 - **Math typesetting:** flashcard equations are rendered with KaTeX, including inline and display math.
-- **Progress and preferences:** retain study progress locally and switch between light and dark themes.
+- **Background music:** loop a relaxing instrumental track, with playback controlled by the sound toggle.
+- **Progress and preferences:** retain study progress locally, switch between light and dark themes, and persist the sound preference.
 - **Midterm practice:** an optional 14-question practice exam with scoring and worked explanations.
 
 ## Run locally
@@ -73,6 +74,7 @@ This project is licensed under the [MIT License](LICENSE).
 
 ```text
 public/
+  background-music.mp3 # Compressed looping background soundtrack
   flashcards.md   # Source deck used by the weekly flashcard rounds
   index.html      # App shell
   style.css       # App styling and themes

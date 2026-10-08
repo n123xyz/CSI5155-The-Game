@@ -153,7 +153,35 @@ var init_state = __esm(() => {
 // src/audio/sound.ts
 class SoundFX {
   ctx = null;
-  enabled = true;
+  music;
+  soundEnabled = true;
+  constructor() {
+    const existingMusic = document.getElementById("background-music");
+    this.music = existingMusic instanceof HTMLAudioElement ? existingMusic : new Audio("/background-music.mp3");
+    this.music.loop = true;
+    this.music.volume = 0.7;
+  }
+  get enabled() {
+    return this.soundEnabled;
+  }
+  set enabled(enabled) {
+    this.soundEnabled = enabled;
+    if (enabled) {
+      this.startMusic();
+    } else {
+      this.music.pause();
+      this.music.currentTime = 0;
+    }
+  }
+  startMusic() {
+    if (!this.soundEnabled || !this.music.paused)
+      return;
+    this.music.play().catch((error) => {
+      if (error instanceof DOMException && error.name === "NotAllowedError")
+        return;
+      console.warn("Background music could not be played:", error);
+    });
+  }
   initCtx() {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -52205,6 +52233,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   });
   sound.enabled = gameManager.getState().soundEnabled;
+  window.addEventListener("pointerdown", () => sound.startMusic(), { once: true });
+  window.addEventListener("keydown", () => sound.startMusic(), { once: true });
   const soundToggle = document.getElementById("btn-sound-toggle");
   if (soundToggle)
     soundToggle.textContent = sound.enabled ? "\uD83D\uDD0A" : "\uD83D\uDD07";
