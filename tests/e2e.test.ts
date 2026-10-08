@@ -47,13 +47,34 @@ async function runTest() {
       : {}),
   });
   const page = await browser.newPage();
+  await page.addInitScript(() => {
+    HTMLMediaElement.prototype.play = function () {
+      (this as HTMLMediaElement).dataset.playAttempts = String(Number(this.dataset.playAttempts ?? 0) + 1);
+      return Promise.resolve();
+    };
+    HTMLMediaElement.prototype.pause = function () {
+      (this as HTMLMediaElement).dataset.pauseCalls = String(Number(this.dataset.pauseCalls ?? 0) + 1);
+    };
+  });
 
   try {
     console.log('Navigating to game...');
     await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle' });
+    const backgroundMusic = page.locator('#background-music');
+    if (!(await backgroundMusic.evaluate(audio => (audio as HTMLAudioElement).loop && (audio as HTMLAudioElement).volume >= 0.65))
+      || !(await backgroundMusic.getAttribute('src'))?.includes('background-music.mp3')) {
+      throw new Error('Background music should use the provided track, loop, and play at an audible level.');
+    }
+    await page.click('button[data-tab="week1"]');
+    if (!(await backgroundMusic.evaluate(audio => (audio as HTMLAudioElement).dataset.playAttempts !== undefined))) {
+      throw new Error('Background music did not attempt playback after user interaction.');
+    }
+    await page.click('#btn-sound-toggle');
+    if (!(await backgroundMusic.evaluate(audio => (audio as HTMLAudioElement).dataset.pauseCalls !== undefined))) {
+      throw new Error('Muting the game did not pause background music.');
+    }
 
     console.log('Checking the weekly before-and-after flashcard flow...');
-    await page.click('button[data-tab="week1"]');
     await page.waitForSelector('.flashcard-deck');
     if (!(await page.locator('.flashcard-card-number').textContent())?.includes('CARD 001')) {
       throw new Error('Week 1 did not begin with CARD 001.');

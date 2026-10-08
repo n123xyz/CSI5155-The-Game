@@ -1,7 +1,39 @@
 // Web Audio API Synthesizer - Zero external audio file dependencies
 class SoundFX {
   private ctx: AudioContext | null = null;
-  public enabled: boolean = true;
+  private music: HTMLAudioElement;
+  private soundEnabled = true;
+
+  constructor() {
+    const existingMusic = document.getElementById('background-music');
+    this.music = existingMusic instanceof HTMLAudioElement
+      ? existingMusic
+      : new Audio('/background-music.mp3');
+    this.music.loop = true;
+    this.music.volume = 0.7;
+  }
+
+  get enabled() {
+    return this.soundEnabled;
+  }
+
+  set enabled(enabled: boolean) {
+    this.soundEnabled = enabled;
+    if (enabled) {
+      this.startMusic();
+    } else {
+      this.music.pause();
+      this.music.currentTime = 0;
+    }
+  }
+
+  startMusic() {
+    if (!this.soundEnabled || !this.music.paused) return;
+    void this.music.play().catch(error => {
+      if (error instanceof DOMException && error.name === 'NotAllowedError') return;
+      console.warn('Background music could not be played:', error);
+    });
+  }
 
   private initCtx() {
     if (!this.ctx) {
