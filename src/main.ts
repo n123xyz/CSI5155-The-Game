@@ -148,7 +148,7 @@ function updateHUD() {
 function renderHub(mainContent: HTMLElement) {
   const s = gameManager.getState();
   const completedCount = Object.keys(s.completedGames).length;
-  const totalGames = 18;
+  const totalGames = Object.values(NAV_CONFIG).reduce((total, week) => total + week.games.length, 0);
   const progressPct = Math.min(100, Math.round((completedCount / totalGames) * 100));
 
   mainContent.innerHTML = `
@@ -182,7 +182,7 @@ function renderHub(mainContent: HTMLElement) {
         <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">
           Supervised vs Unsupervised vs RL conveyor rush (Midterm Q1), Mitchell's E/T/P architect, and 3D Vector transformation arena.
         </p>
-        <button class="btn btn-sm btn-secondary">Launch Week 1 (3 Games) →</button>
+        <button class="btn btn-sm btn-secondary">Launch Week 1 (${NAV_CONFIG.week1.games.length} Games) →</button>
       </div>
 
       <!-- Week 2 Card -->
@@ -192,7 +192,7 @@ function renderHub(mainContent: HTMLElement) {
         <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">
           3D Paraboloid Loss Marble Run (Batch vs SGD, Q2), Regularization Gauntlet (L1 Lasso vs L2 Ridge, Q4), Clinical Sigmoid Triage, and 3D SVM Kernel Warp (Q7).
         </p>
-        <button class="btn btn-sm btn-secondary">Launch Week 2 (4 Games) →</button>
+        <button class="btn btn-sm btn-secondary">Launch Week 2 (${NAV_CONFIG.week2.games.length} Games) →</button>
       </div>
 
       <!-- Week 3 Card -->
@@ -202,7 +202,7 @@ function renderHub(mainContent: HTMLElement) {
         <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">
           Entropy & Information Gain Guillotine (Sensor Q14), 3D k-NN Cosmic Radar (Q12), Missing Data Detective (Q13), and Class Balancer SMOTE (Q10).
         </p>
-        <button class="btn btn-sm btn-secondary">Launch Week 3 (4 Games) →</button>
+        <button class="btn btn-sm btn-secondary">Launch Week 3 (${NAV_CONFIG.week3.games.length} Games) →</button>
       </div>
 
       <!-- Week 4 Card -->
@@ -212,7 +212,7 @@ function renderHub(mainContent: HTMLElement) {
         <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">
           Confusion Matrix Air Defense (Precision vs Recall vs F1), Forward Selection vs Backward Elimination (Q6), 3-Way Split Gauntlet (Q9), and 3D PCA SVD Squeezer (Q5).
         </p>
-        <button class="btn btn-sm btn-secondary">Launch Week 4 (4 Games) →</button>
+        <button class="btn btn-sm btn-secondary">Launch Week 4 (${NAV_CONFIG.week4.games.length} Games) →</button>
       </div>
 
       <!-- Week 5 Card -->
@@ -222,7 +222,7 @@ function renderHub(mainContent: HTMLElement) {
         <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">
           3D K-Means & Dendrogram Linkage Chopper (Q1), Semi-Supervised & Active Learning Oracle, and Ensemble Clash (Bagging vs Boosting, Q11).
         </p>
-        <button class="btn btn-sm btn-secondary">Launch Week 5 (3 Games) →</button>
+        <button class="btn btn-sm btn-secondary">Launch Week 5 (${NAV_CONFIG.week5.games.length} Games) →</button>
       </div>
 
       <!-- Grand Midterm Card -->
@@ -387,10 +387,14 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // Sound toggle button
-  document.getElementById('btn-sound-toggle')?.addEventListener('click', (e) => {
+  // Restore and display the saved sound preference.
+  sound.enabled = gameManager.getState().soundEnabled;
+  const soundToggle = document.getElementById('btn-sound-toggle');
+  if (soundToggle) soundToggle.textContent = sound.enabled ? '🔊' : '🔇';
+  soundToggle?.addEventListener('click', (e) => {
     sound.enabled = !sound.enabled;
-    (e.target as HTMLElement).textContent = sound.enabled ? '🔊' : '🔇';
+    gameManager.setSoundEnabled(sound.enabled);
+    (e.currentTarget as HTMLElement).textContent = sound.enabled ? '🔊' : '🔇';
     sound.playClick();
   });
 

@@ -185,6 +185,86 @@ async function runTest() {
       }
     }
     await bayesPage.close();
+
+    const diagnosticsPage = await browser.newPage();
+    await diagnosticsPage.addInitScript(() => {
+      if (localStorage.getItem('csi5155_ml_game_state_v1')) return;
+      localStorage.setItem('csi5155_ml_game_state_v1', JSON.stringify({
+        score: 0,
+        xp: 0,
+        streak: 0,
+        completedGames: {},
+        quizScores: {},
+        flashcardRuns: {},
+        weekProgress: {
+          week4: { beforeComplete: true, afterComplete: false, visitedGames: [], completedGames: [] },
+        },
+        currentWeek: 'hub',
+        soundEnabled: true,
+      }));
+    });
+    const pageErrors: string[] = [];
+    diagnosticsPage.on('pageerror', error => pageErrors.push(error.message));
+    await diagnosticsPage.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle' });
+    if (await diagnosticsPage.locator('.hub-metrics .hub-metric-card').nth(1).locator('.val').textContent() !== '0 / 28') {
+      throw new Error('Hub game total should match the 28 available weekly lessons.');
+    }
+    for (const [weekIndex, count] of [5, 6, 6, 8, 3].entries()) {
+      if (!(await diagnosticsPage.locator('.hub-week-card').nth(weekIndex).textContent())?.includes(`(${count} Games)`)) {
+        throw new Error(`Week ${weekIndex + 1} hub card should show ${count} games.`);
+      }
+    }
+
+    await diagnosticsPage.click('#btn-sound-toggle');
+    if (await diagnosticsPage.locator('#btn-sound-toggle').textContent() !== '🔇') {
+      throw new Error('Sound toggle did not switch to muted.');
+    }
+    const savedSoundPreference = await diagnosticsPage.evaluate(() =>
+      JSON.parse(localStorage.getItem('csi5155_ml_game_state_v1') ?? '{}').soundEnabled,
+    );
+    if (savedSoundPreference !== false) {
+      throw new Error('Muted sound preference was not persisted.');
+    }
+    await diagnosticsPage.reload({ waitUntil: 'networkidle' });
+    if (await diagnosticsPage.locator('#btn-sound-toggle').textContent() !== '🔇') {
+      const soundState = await diagnosticsPage.evaluate(() => ({
+        icon: document.querySelector('#btn-sound-toggle')?.textContent,
+        saved: JSON.parse(localStorage.getItem('csi5155_ml_game_state_v1') ?? '{}').soundEnabled,
+      }));
+      throw new Error(`Muted sound preference was not restored after reload: ${JSON.stringify(soundState)}.`);
+    }
+
+    await diagnosticsPage.click('button[data-tab="week4"]');
+    await diagnosticsPage.click('.sub-nav-btn[data-gameid="roc"]');
+    if (pageErrors.some(error => error.includes('auroc is not defined'))) {
+      throw new Error('The ROC/AUROC lesson threw an undefined-auroc error.');
+    }
+    const aurocLabel = await diagnosticsPage.locator('.viewport-overlay').first().textContent();
+    if (!aurocLabel?.includes('AUROC: 0.88')) {
+      throw new Error(`ROC/AUROC lesson did not render its empirical AUC: ${aurocLabel}`);
+    }
+
+    await diagnosticsPage.click('.sub-nav-btn[data-gameid="regression"]');
+    await diagnosticsPage.click('.step-dot[data-step="3"]');
+    await diagnosticsPage.click('.q-opt-reg[data-val="correct"]');
+    await diagnosticsPage.waitForFunction(() => document.querySelector('#hud-score')?.textContent === '200');
+    await diagnosticsPage.click('.q-opt-reg[data-val="correct"]');
+    if (await diagnosticsPage.locator('#hud-score').textContent() !== '200') {
+      throw new Error('Repeated correct regression answers awarded score more than once.');
+    }
+    await diagnosticsPage.reload({ waitUntil: 'networkidle' });
+    await diagnosticsPage.click('button[data-tab="week4"]');
+    await diagnosticsPage.click('.sub-nav-btn[data-gameid="regression"]');
+    await diagnosticsPage.click('.step-dot[data-step="3"]');
+    await diagnosticsPage.click('.q-opt-reg[data-val="correct"]');
+    if (await diagnosticsPage.locator('#hud-score').textContent() !== '200') {
+      throw new Error('Regression mastery score was awarded again after reload.');
+    }
+    if (pageErrors.length) {
+      throw new Error(`Diagnostic browser page errors: ${pageErrors.join(' | ')}`);
+    }
+    await diagnosticsPage.close();
+
     const auditPage = await browser.newPage();
     await auditPage.addInitScript(() => {
       const weekProgress = Object.fromEntries(
