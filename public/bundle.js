@@ -36244,8 +36244,8 @@ function renderWeek4RocAurocSweeper(container) {
             <div style="display: grid; grid-template-columns: 1fr 340px; gap: 20px; margin-bottom: 16px;">
               <div class="game-viewport" style="height: 320px;">
                 <canvas id="roc-canvas" width="600" height="320" style="width: 100%; height: 100%;"></canvas>
-                <div class="viewport-overlay">
-                  ROC Curve: Y = True Positive Rate (Sensitivity), X = False Positive Rate (1 - Specificity)
+                <div class="viewport-overlay" style="left: auto; right: 14px; top: 14px; font-size: 11px;">
+                  AUROC: <strong style="color:var(--accent-green);">${auroc.toFixed(2)}</strong> (Empirical Piecewise Curve)
                 </div>
               </div>
 
@@ -36363,11 +36363,18 @@ function renderWeek4RocAurocSweeper(container) {
         ctx.moveTo(padX, padY);
         ctx.lineTo(padX, padY + h);
         ctx.lineTo(padX + w, padY + h);
-        ctx.stroke();
-        ctx.font = "10px Fira Code";
-        ctx.fillStyle = "rgba(255,255,255,0.4)";
-        ctx.fillText("FPR (1 - Specificity) →", padX + w - 160, padY + h + 22);
-        ctx.fillText("↑ TPR (Sensitivity)", padX - 50, padY + 12);
+        ctx.textAlign = "center";
+        ctx.font = '11px "Fira Code", monospace';
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillText("False Positive Rate (1 - Specificity) →", padX + w / 2, padY + h + 26);
+        ctx.save();
+        ctx.translate(20, padY + h / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = "center";
+        ctx.font = '11px "Fira Code", monospace';
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillText("True Positive Rate (Sensitivity) →", 0, 0);
+        ctx.restore();
         ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
@@ -36885,8 +36892,8 @@ function renderWeek4HyperparamTuning(container) {
             <div style="display: grid; grid-template-columns: 1fr 320px; gap: 20px; margin-bottom: 16px;">
               <div class="game-viewport" style="height: 300px;">
                 <canvas id="tuning-canvas" width="600" height="300" style="width: 100%; height: 100%;"></canvas>
-                <div class="viewport-overlay">
-                  X = Learning Rate α (Important) | Y = Irrelevant Hyperparameter (Unimportant)
+                <div class="viewport-overlay" style="left: auto; right: 14px; top: 14px; font-size: 11.5px;">
+                  Strategy: <strong style="color: ${mode === "grid" ? "var(--accent-cyan)" : "#c084fc"};">${mode === "grid" ? "Grid Search (16 Trials)" : "Random Search (16 Trials)"}</strong>
                 </div>
               </div>
 
@@ -36966,25 +36973,33 @@ function renderWeek4HyperparamTuning(container) {
       if (canvas) {
         const ctx = canvas.getContext("2d");
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const padX = 50, padY = 30;
-        const w = canvas.width - padX * 2;
-        const h = canvas.height - padY * 2;
-        ctx.strokeStyle = "rgba(255,255,255,0.2)";
+        const padLeft = 65, padRight = 35, padTop = 35, padBottom = 45;
+        const w = canvas.width - padLeft - padRight;
+        const h = canvas.height - padTop - padBottom;
+        ctx.strokeStyle = "rgba(255,255,255,0.25)";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(padX, padY);
-        ctx.lineTo(padX, padY + h);
-        ctx.lineTo(padX + w, padY + h);
+        ctx.moveTo(padLeft, padTop);
+        ctx.lineTo(padLeft, padTop + h);
+        ctx.lineTo(padLeft + w, padTop + h);
         ctx.stroke();
-        ctx.font = "10px Fira Code";
-        ctx.fillStyle = "rgba(255,255,255,0.5)";
-        ctx.fillText("Important Parameter (e.g. Learning Rate α) →", padX + 20, padY + h + 20);
-        ctx.fillText("↑ Unimportant Parameter (e.g. Batch Seed)", padX - 45, padY - 10);
+        ctx.textAlign = "center";
+        ctx.font = '11px "Fira Code", monospace';
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillText("Important Parameter (e.g. Learning Rate α) →", padLeft + w / 2, padTop + h + 30);
+        ctx.save();
+        ctx.translate(22, padTop + h / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = "center";
+        ctx.font = '11px "Fira Code", monospace';
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillText("Unimportant Parameter (Batch Seed) →", 0, 0);
+        ctx.restore();
         if (mode === "grid") {
           for (let i = 0;i < 4; i++) {
             for (let j = 0;j < 4; j++) {
-              const px = padX + i / 3 * w;
-              const py = padY + j / 3 * h;
+              const px = padLeft + i / 3 * w;
+              const py = padTop + j / 3 * h;
               ctx.fillStyle = "#00f0ff";
               ctx.beginPath();
               ctx.arc(px, py, 6, 0, Math.PI * 2);
@@ -37014,9 +37029,9 @@ function renderWeek4HyperparamTuning(container) {
             [0.98, 0.22]
           ];
           seeds.forEach(([rx, ry]) => {
-            const px = padX + rx * w;
-            const py = padY + ry * h;
-            ctx.fillStyle = "#a855f7";
+            const px = padLeft + rx * w;
+            const py = padTop + ry * h;
+            ctx.fillStyle = "#c084fc";
             ctx.beginPath();
             ctx.arc(px, py, 6, 0, Math.PI * 2);
             ctx.fill();

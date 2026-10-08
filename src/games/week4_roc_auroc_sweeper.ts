@@ -87,8 +87,8 @@ export function renderWeek4RocAurocSweeper(container: HTMLElement) {
             <div style="display: grid; grid-template-columns: 1fr 340px; gap: 20px; margin-bottom: 16px;">
               <div class="game-viewport" style="height: 320px;">
                 <canvas id="roc-canvas" width="600" height="320" style="width: 100%; height: 100%;"></canvas>
-                <div class="viewport-overlay">
-                  ROC Curve: Y = True Positive Rate (Sensitivity), X = False Positive Rate (1 - Specificity)
+                <div class="viewport-overlay" style="left: auto; right: 14px; top: 14px; font-size: 11px;">
+                  AUROC: <strong style="color:var(--accent-green);">${auroc.toFixed(2)}</strong> (Empirical Piecewise Curve)
                 </div>
               </div>
 
@@ -211,12 +211,21 @@ export function renderWeek4RocAurocSweeper(container: HTMLElement) {
         ctx.moveTo(padX, padY);
         ctx.lineTo(padX, padY + h);
         ctx.lineTo(padX + w, padY + h);
-        ctx.stroke();
+        // X-axis label (centered beneath)
+        ctx.textAlign = 'center';
+        ctx.font = '11px "Fira Code", monospace';
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillText('False Positive Rate (1 - Specificity) →', padX + w / 2, padY + h + 26);
 
-        ctx.font = '10px Fira Code';
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.fillText('FPR (1 - Specificity) →', padX + w - 160, padY + h + 22);
-        ctx.fillText('↑ TPR (Sensitivity)', padX - 50, padY + 12);
+        // Y-axis label (cleanly rotated along the left margin)
+        ctx.save();
+        ctx.translate(20, padY + h / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = 'center';
+        ctx.font = '11px "Fira Code", monospace';
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillText('True Positive Rate (Sensitivity) →', 0, 0);
+        ctx.restore();
 
         // Diagonal chance line (AUROC = 0.5)
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
