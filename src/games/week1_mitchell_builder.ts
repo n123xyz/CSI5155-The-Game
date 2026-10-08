@@ -68,6 +68,7 @@ export function renderWeek1MitchellBuilder(container: HTMLElement) {
   let selE: number | null = null;
   let selT: number | null = null;
   let selP: number | null = null;
+  let feedbackHtml = '';
 
   function render() {
     if (scenarioIdx >= SCENARIOS.length) {
@@ -111,7 +112,7 @@ export function renderWeek1MitchellBuilder(container: HTMLElement) {
             <h4 style="color: var(--accent-cyan); font-size: 14px; margin-bottom: 12px;">1. Experience (E)</h4>
             <div style="display: flex; flex-direction: column; gap: 8px;">
               ${s.optionsE.map((opt, i) => `
-                <button class="btn btn-secondary opt-btn-e ${selE === i ? 'active' : ''}" data-idx="${i}" style="text-align: left; font-size: 12px; padding: 10px; border-radius: 8px; justify-content: flex-start;">
+                <button class="btn btn-secondary mitchell-option opt-btn-e ${selE === i ? 'selected' : ''}" data-idx="${i}" aria-pressed="${selE === i}" style="text-align: left; font-size: 12px; padding: 10px; border-radius: 8px; justify-content: flex-start;">
                   ${opt}
                 </button>
               `).join('')}
@@ -123,7 +124,7 @@ export function renderWeek1MitchellBuilder(container: HTMLElement) {
             <h4 style="color: #c084fc; font-size: 14px; margin-bottom: 12px;">2. Task (T)</h4>
             <div style="display: flex; flex-direction: column; gap: 8px;">
               ${s.optionsT.map((opt, i) => `
-                <button class="btn btn-secondary opt-btn-t ${selT === i ? 'active' : ''}" data-idx="${i}" style="text-align: left; font-size: 12px; padding: 10px; border-radius: 8px; justify-content: flex-start;">
+                <button class="btn btn-secondary mitchell-option opt-btn-t ${selT === i ? 'selected' : ''}" data-idx="${i}" aria-pressed="${selT === i}" style="text-align: left; font-size: 12px; padding: 10px; border-radius: 8px; justify-content: flex-start;">
                   ${opt}
                 </button>
               `).join('')}
@@ -135,7 +136,7 @@ export function renderWeek1MitchellBuilder(container: HTMLElement) {
             <h4 style="color: var(--accent-green); font-size: 14px; margin-bottom: 12px;">3. Performance (P)</h4>
             <div style="display: flex; flex-direction: column; gap: 8px;">
               ${s.optionsP.map((opt, i) => `
-                <button class="btn btn-secondary opt-btn-p ${selP === i ? 'active' : ''}" data-idx="${i}" style="text-align: left; font-size: 12px; padding: 10px; border-radius: 8px; justify-content: flex-start;">
+                <button class="btn btn-secondary mitchell-option opt-btn-p ${selP === i ? 'selected' : ''}" data-idx="${i}" aria-pressed="${selP === i}" style="text-align: left; font-size: 12px; padding: 10px; border-radius: 8px; justify-content: flex-start;">
                   ${opt}
                 </button>
               `).join('')}
@@ -143,7 +144,7 @@ export function renderWeek1MitchellBuilder(container: HTMLElement) {
           </div>
         </div>
 
-        <div id="mitchell-feedback" style="min-height: 40px; margin-bottom: 16px;"></div>
+        <div id="mitchell-feedback" style="min-height: 40px; margin-bottom: 16px;">${feedbackHtml}</div>
 
         <div style="display: flex; justify-content: flex-end;">
           <button id="btn-verify-mitchell" class="btn btn-primary" ${selE !== null && selT !== null && selP !== null ? '' : 'disabled'}>
@@ -192,23 +193,26 @@ export function renderWeek1MitchellBuilder(container: HTMLElement) {
       if (selE === s.correctE && selT === s.correctT && selP === s.correctP) {
         sound.playCorrect();
         gameManager.addScore(100, 50);
-        feedback.innerHTML = `
-          <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 12px 16px; color: #a7f3d0;">
+        feedbackHtml = `
+          <div class="game-feedback-success" style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 12px 16px; color: #a7f3d0;">
             <strong>✓ Correct Architecture! (+100 pts)</strong> ${s.explanation}
           </div>
         `;
+        feedback.innerHTML = feedbackHtml;
         setTimeout(() => {
           scenarioIdx++;
           selE = null; selT = null; selP = null;
+          feedbackHtml = '';
           render();
-        }, 1500);
+        }, 5000);
       } else {
         sound.playWrong();
-        feedback.innerHTML = `
-          <div style="background: rgba(255, 51, 68, 0.15); border: 1px solid var(--accent-red); border-radius: var(--radius-md); padding: 12px 16px; color: #fca5a5;">
+        feedbackHtml = `
+          <div class="game-feedback-error" style="background: rgba(255, 51, 68, 0.15); border: 1px solid var(--accent-red); border-radius: var(--radius-md); padding: 12px 16px; color: #fca5a5;">
             <strong>✗ Not quite!</strong> Review the definitions of Experience E (data), Task T (action), and Performance P (metric).
           </div>
         `;
+        feedback.innerHTML = feedbackHtml;
       }
     });
   }

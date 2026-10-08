@@ -273,7 +273,7 @@ export function renderWeek1ParadigmSorter(container: HTMLElement) {
       gameManager.addScore(earned, 25);
 
       feedbackEl.innerHTML = `
-        <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 12px 18px; color: #a7f3d0;">
+        <div class="game-feedback-success sorter-feedback-success" style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 12px 18px; color: #a7f3d0;">
           <strong>✓ Correct! (+${earned} pts)</strong> — ${item.explanation}
         </div>
       `;
@@ -283,7 +283,7 @@ export function renderWeek1ParadigmSorter(container: HTMLElement) {
       gameManager.resetStreak();
 
       feedbackEl.innerHTML = `
-        <div style="background: rgba(255, 51, 68, 0.15); border: 1px solid var(--accent-red); border-radius: var(--radius-md); padding: 12px 18px; color: #fca5a5;">
+        <div class="game-feedback-error" style="background: rgba(255, 51, 68, 0.15); border: 1px solid var(--accent-red); border-radius: var(--radius-md); padding: 12px 18px; color: #fca5a5;">
           <strong>✗ Incorrect!</strong> Expected <em>${item.category.toUpperCase()}</em>. ${item.explanation}
         </div>
       `;
@@ -293,7 +293,7 @@ export function renderWeek1ParadigmSorter(container: HTMLElement) {
     setTimeout(() => {
       currentIndex++;
       renderCard();
-    }, 1200);
+    }, 5000);
   }
 
   renderCard();

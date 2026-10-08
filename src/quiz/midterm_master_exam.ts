@@ -382,7 +382,7 @@ export function renderMidtermMasterExam(container: HTMLElement) {
       <div class="exam-simulator-wrap" style="max-width: 1200px; margin: 0 auto; padding-bottom: 60px;">
         
         <!-- Header Banner -->
-        <div class="game-card" style="background: linear-gradient(135deg, rgba(20, 30, 55, 0.9), rgba(15, 20, 35, 0.95)); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: var(--radius-xl); padding: 32px; margin-bottom: 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.6);">
+        <div class="game-card exam-header-card" style="background: linear-gradient(135deg, rgba(20, 30, 55, 0.9), rgba(15, 20, 35, 0.95)); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: var(--radius-xl); padding: 32px; margin-bottom: 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.6);">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 20px;">
             <div>
               <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
@@ -1261,7 +1261,7 @@ export function renderMidtermMasterExam(container: HTMLElement) {
         ` : ''}
 
         <!-- Bottom Grand Submit Banner -->
-        <div class="game-card" style="margin-top: 32px; text-align: center; padding: 36px; border-radius: var(--radius-xl); background: linear-gradient(135deg, rgba(20,28,45,0.9), rgba(12,18,30,0.95)); border: 1px solid var(--border-color);">
+        <div class="game-card exam-finish-card" style="margin-top: 32px; text-align: center; padding: 36px; border-radius: var(--radius-xl); background: linear-gradient(135deg, rgba(20,28,45,0.9), rgba(12,18,30,0.95)); border: 1px solid var(--border-color);">
           <h2 style="font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 12px;">Ready to Finalize Your Midterm Score?</h2>
           <p style="color: var(--text-secondary); max-width: 600px; margin: 0 auto 20px auto; font-size: 14px;">
             Submitting will evaluate all 14 questions, calculate your weighted percentage grade out of 100%, record your progress in the game profile, and unlock full solution derivations.

@@ -21,7 +21,18 @@ class StateManager {
     try {
       const data = localStorage.getItem(STORAGE_KEY);
       if (data) {
-        return JSON.parse(data);
+        const saved = JSON.parse(data);
+        return {
+          score: saved.score ?? 0,
+          xp: saved.xp ?? 0,
+          streak: saved.streak ?? 0,
+          completedGames: saved.completedGames ?? {},
+          quizScores: saved.quizScores ?? {},
+          flashcardRuns: saved.flashcardRuns ?? {},
+          weekProgress: saved.weekProgress ?? {},
+          currentWeek: saved.currentWeek ?? "hub",
+          soundEnabled: saved.soundEnabled ?? true
+        };
       }
     } catch (e) {
       console.warn("LocalStorage error:", e);
@@ -32,6 +43,8 @@ class StateManager {
       streak: 0,
       completedGames: {},
       quizScores: {},
+      flashcardRuns: {},
+      weekProgress: {},
       currentWeek: "hub",
       soundEnabled: true
     };
@@ -68,6 +81,55 @@ class StateManager {
       score,
       maxScore,
       date: new Date().toISOString()
+    };
+    this.save();
+  }
+  getWeekProgress(weekId) {
+    const progress = this.state.weekProgress[weekId];
+    return {
+      beforeComplete: progress?.beforeComplete ?? false,
+      afterComplete: progress?.afterComplete ?? false,
+      visitedGames: progress?.visitedGames ?? [],
+      completedGames: progress?.completedGames ?? []
+    };
+  }
+  markWeekFlashcardsComplete(weekId, phase) {
+    const progress = this.getWeekProgress(weekId);
+    this.state.weekProgress[weekId] = {
+      ...progress,
+      [phase === "before" ? "beforeComplete" : "afterComplete"]: true
+    };
+    this.save();
+  }
+  markWeekGameVisited(weekId, gameId) {
+    const progress = this.getWeekProgress(weekId);
+    if (progress.visitedGames.includes(gameId))
+      return;
+    this.state.weekProgress[weekId] = {
+      ...progress,
+      visitedGames: [...progress.visitedGames, gameId]
+    };
+    this.save();
+  }
+  markWeekGameComplete(weekId, gameId) {
+    const progress = this.getWeekProgress(weekId);
+    if (progress.completedGames.includes(gameId))
+      return;
+    this.state.weekProgress[weekId] = {
+      ...progress,
+      completedGames: [...progress.completedGames, gameId]
+    };
+    this.save();
+  }
+  getFlashcardRun(weekId, phase) {
+    return this.state.flashcardRuns[`${weekId}:${phase}`] ?? { ratedCards: {} };
+  }
+  rateFlashcard(weekId, phase, cardId, knewIt) {
+    const key = `${weekId}:${phase}`;
+    const run = this.getFlashcardRun(weekId, phase);
+    this.state.flashcardRuns[key] = {
+      ...run,
+      ratedCards: { ...run.ratedCards, [cardId]: knewIt }
     };
     this.save();
   }
@@ -29216,7 +29278,7 @@ function renderMidtermMasterExam(container) {
       <div class="exam-simulator-wrap" style="max-width: 1200px; margin: 0 auto; padding-bottom: 60px;">
         
         <!-- Header Banner -->
-        <div class="game-card" style="background: linear-gradient(135deg, rgba(20, 30, 55, 0.9), rgba(15, 20, 35, 0.95)); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: var(--radius-xl); padding: 32px; margin-bottom: 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.6);">
+        <div class="game-card exam-header-card" style="background: linear-gradient(135deg, rgba(20, 30, 55, 0.9), rgba(15, 20, 35, 0.95)); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: var(--radius-xl); padding: 32px; margin-bottom: 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.6);">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 20px;">
             <div>
               <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
@@ -30094,7 +30156,7 @@ function renderMidtermMasterExam(container) {
         ` : ""}
 
         <!-- Bottom Grand Submit Banner -->
-        <div class="game-card" style="margin-top: 32px; text-align: center; padding: 36px; border-radius: var(--radius-xl); background: linear-gradient(135deg, rgba(20,28,45,0.9), rgba(12,18,30,0.95)); border: 1px solid var(--border-color);">
+        <div class="game-card exam-finish-card" style="margin-top: 32px; text-align: center; padding: 36px; border-radius: var(--radius-xl); background: linear-gradient(135deg, rgba(20,28,45,0.9), rgba(12,18,30,0.95)); border: 1px solid var(--border-color);">
           <h2 style="font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 12px;">Ready to Finalize Your Midterm Score?</h2>
           <p style="color: var(--text-secondary); max-width: 600px; margin: 0 auto 20px auto; font-size: 14px;">
             Submitting will evaluate all 14 questions, calculate your weighted percentage grade out of 100%, record your progress in the game profile, and unlock full solution derivations.
@@ -30476,6 +30538,228 @@ var init_midterm_master_exam = __esm(() => {
 init_state();
 init_sound();
 
+// src/flashcards.ts
+init_state();
+var decks = new Map;
+var renderToken = 0;
+function escapeHtml(value) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function renderInline(markdown) {
+  let text = escapeHtml(markdown);
+  text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  text = text.replace(/\*(.+?)\*/g, "<em>$1</em>");
+  text = text.replace(/`([^`]+)`/g, "<code>$1</code>");
+  text = text.replace(/\$([^$\n]+)\$/g, '<span class="flashcard-math">$1</span>');
+  return text;
+}
+function renderMarkdown(markdown) {
+  const blocks = [];
+  let paragraph = [];
+  let listItems = [];
+  const flushParagraph = () => {
+    if (paragraph.length) {
+      blocks.push(`<p>${paragraph.map(renderInline).join("<br>")}</p>`);
+      paragraph = [];
+    }
+  };
+  const flushList = () => {
+    if (listItems.length) {
+      const firstItem = listItems[0];
+      if (!firstItem)
+        return;
+      const ordered = firstItem.ordered;
+      const tag = ordered ? "ol" : "ul";
+      blocks.push(`<${tag}>${listItems.map((item) => `<li>${renderInline(item.text)}</li>`).join("")}</${tag}>`);
+      listItems = [];
+    }
+  };
+  for (const line of markdown.split(/\r?\n/)) {
+    const listItem = line.match(/^\s*(?:([-*])|(\d+\.))\s+(.+)$/);
+    if (listItem?.[3] !== undefined) {
+      flushParagraph();
+      listItems.push({ ordered: Boolean(listItem[2]), text: listItem[3] });
+    } else if (line.trim()) {
+      flushList();
+      paragraph.push(line.trim());
+    } else {
+      flushParagraph();
+      flushList();
+    }
+  }
+  flushParagraph();
+  flushList();
+  return blocks.join("");
+}
+function parseField(block, field) {
+  const marker = `* **${field}:**`;
+  const start = block.indexOf(marker);
+  if (start < 0)
+    throw new Error(`Flashcard is missing its ${field.toLowerCase()}.`);
+  const valueStart = start + marker.length;
+  let valueEnd = block.length;
+  if (field === "Front") {
+    valueEnd = block.indexOf("* **Back:**", valueStart);
+    if (valueEnd < 0)
+      throw new Error("Flashcard is missing its back.");
+  }
+  return block.slice(valueStart, valueEnd).trim();
+}
+function parseDeck(source, week) {
+  const sectionPattern = new RegExp(`^## SECTION [1-5]: (Week ${week.slice(-1)} — .+)$`, "m");
+  const sectionMatch = source.match(sectionPattern);
+  const sectionTitle = sectionMatch?.[1];
+  if (!sectionMatch || sectionMatch.index === undefined || !sectionTitle) {
+    throw new Error(`The source deck has no flashcard section for ${week}.`);
+  }
+  const sectionStart = sectionMatch.index + sectionMatch[0].length;
+  const nextSection = source.indexOf(`
+## SECTION `, sectionStart);
+  const section = source.slice(sectionStart, nextSection < 0 ? undefined : nextSection);
+  const cardBlocks = [...section.matchAll(/^### CARD (\d+)\s*$/gm)];
+  const cards = cardBlocks.map((match, index) => {
+    const start = match.index + match[0].length;
+    const end = cardBlocks[index + 1]?.index ?? section.length;
+    const block = section.slice(start, end);
+    const id = match[1];
+    if (!id)
+      throw new Error("A flashcard in the source deck is missing its card number.");
+    return {
+      id,
+      front: parseField(block, "Front"),
+      back: parseField(block, "Back")
+    };
+  });
+  if (!cards.length)
+    throw new Error(`The source deck contains no cards for ${week}.`);
+  return { title: sectionTitle, cards };
+}
+function loadDeck(week) {
+  let deck = decks.get(week);
+  if (!deck) {
+    deck = fetch("/flashcards.md").then((response) => {
+      if (!response.ok)
+        throw new Error(`Could not load the flashcard deck (${response.status}).`);
+      return response.text();
+    }).then((source) => parseDeck(source, week));
+    decks.set(week, deck);
+  }
+  return deck;
+}
+function renderError(container, message) {
+  container.innerHTML = `
+    <section class="game-card flashcard-error" role="alert">
+      <h2>Flashcards could not be loaded</h2>
+      <p>${escapeHtml(message)}</p>
+      <button class="btn btn-secondary" type="button" data-flashcard-retry>Retry</button>
+    </section>
+  `;
+  container.querySelector("[data-flashcard-retry]")?.addEventListener("click", () => {
+    decks.clear();
+    renderWeekFlashcards(container, container.dataset.week, container.dataset.phase);
+  });
+}
+function renderCard(container, week, phase, deck, token, onBeforeComplete) {
+  const run = gameManager.getFlashcardRun(week, phase);
+  const rated = run.ratedCards;
+  const card = deck.cards.find((item) => !(item.id in rated));
+  const finished = !card;
+  const reviewCount = Object.values(rated).filter((knewIt) => !knewIt).length;
+  const phaseLabel = phase === "before" ? "Before the week" : "After the week";
+  if (finished) {
+    gameManager.markWeekFlashcardsComplete(week, phase);
+    container.innerHTML = `
+      <section class="game-card flashcard-deck" aria-live="polite">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>${escapeHtml(phaseLabel)} flashcards complete</h2>
+            <p class="card-subtitle">${escapeHtml(deck.title)}</p>
+          </div>
+          <span class="concept-badge">Week ${week.slice(-1)} • ${deck.cards.length} cards</span>
+        </div>
+        <div class="flashcard-complete">
+          <h3>Deck complete</h3>
+          <p>You marked every card. ${reviewCount} ${reviewCount === 1 ? "card is" : "cards are"} flagged for another look.</p>
+          ${phase === "after" ? "<p>This week’s before-and-after flashcard rounds are complete.</p>" : "<p>Your week content is now unlocked.</p>"}
+          ${phase === "before" ? '<button class="btn btn-primary" type="button" data-start-week>Start week content</button>' : ""}
+        </div>
+      </section>
+    `;
+    container.querySelector("[data-start-week]")?.addEventListener("click", () => onBeforeComplete?.());
+    return;
+  }
+  const position = Object.keys(rated).length + 1;
+  container.innerHTML = `
+    <section class="game-card flashcard-deck">
+      <div class="card-header">
+        <div class="card-title-group">
+          <h2>${escapeHtml(phaseLabel)} flashcards</h2>
+          <p class="card-subtitle">${escapeHtml(deck.title)}</p>
+        </div>
+        <span class="concept-badge">Week ${week.slice(-1)} • ${deck.cards.length} cards</span>
+      </div>
+
+      <div class="flashcard-progress-row">
+        <span>Card ${position} of ${deck.cards.length}</span>
+        <span>${reviewCount} flagged to review</span>
+      </div>
+      <div class="flashcard-progress-track" role="progressbar" aria-label="Flashcards completed" aria-valuemin="0" aria-valuemax="${deck.cards.length}" aria-valuenow="${Object.keys(rated).length}">
+        <span style="width: ${Object.keys(rated).length / deck.cards.length * 100}%"></span>
+      </div>
+
+      <article class="flashcard" aria-labelledby="flashcard-front-label">
+        <div class="flashcard-card-number">CARD ${escapeHtml(card.id)}</div>
+        <h3 id="flashcard-front-label">Front</h3>
+        <div class="flashcard-content">${renderMarkdown(card.front)}</div>
+        <div class="flashcard-answer" ${container.dataset.revealed === "true" ? "" : "hidden"}>
+          <h3>Back</h3>
+          <div class="flashcard-content">${renderMarkdown(card.back)}</div>
+        </div>
+      </article>
+
+      <div class="flashcard-actions">
+        ${container.dataset.revealed === "true" ? `
+          <button class="btn btn-primary" type="button" data-rate="known">I knew this</button>
+          <button class="btn btn-secondary" type="button" data-rate="review">Review again</button>
+        ` : '<button class="btn btn-primary" type="button" data-reveal>Reveal answer</button>'}
+      </div>
+    </section>
+  `;
+  container.querySelector("[data-reveal]")?.addEventListener("click", () => {
+    if (container.dataset.flashcardRenderToken !== String(token))
+      return;
+    container.dataset.revealed = "true";
+    renderCard(container, week, phase, deck, token, onBeforeComplete);
+  });
+  container.querySelectorAll("[data-rate]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (container.dataset.flashcardRenderToken !== String(token))
+        return;
+      gameManager.rateFlashcard(week, phase, card.id, button.dataset.rate === "known");
+      container.dataset.revealed = "false";
+      renderCard(container, week, phase, deck, token, onBeforeComplete);
+    });
+  });
+}
+function renderWeekFlashcards(container, week, phase, onBeforeComplete) {
+  const token = ++renderToken;
+  container.dataset.flashcardRenderToken = String(token);
+  container.dataset.week = week;
+  container.dataset.phase = phase;
+  container.dataset.revealed = "false";
+  container.innerHTML = '<section class="game-card"><p>Loading flashcards…</p></section>';
+  loadDeck(week).then((deck) => {
+    if (container.dataset.flashcardRenderToken !== String(token))
+      return;
+    renderCard(container, week, phase, deck, token, onBeforeComplete);
+  }).catch((error) => {
+    console.error("Flashcard deck loading failed:", error);
+    if (container.dataset.flashcardRenderToken === String(token)) {
+      renderError(container, error instanceof Error ? error.message : "An unknown error occurred.");
+    }
+  });
+}
+
 // src/games/week1_paradigm_sorter.ts
 init_state();
 init_sound();
@@ -30722,7 +31006,7 @@ function renderWeek1ParadigmSorter(container) {
       score += earned;
       gameManager.addScore(earned, 25);
       feedbackEl.innerHTML = `
-        <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 12px 18px; color: #a7f3d0;">
+        <div class="game-feedback-success sorter-feedback-success" style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 12px 18px; color: #a7f3d0;">
           <strong>✓ Correct! (+${earned} pts)</strong> — ${item.explanation}
         </div>
       `;
@@ -30731,7 +31015,7 @@ function renderWeek1ParadigmSorter(container) {
       streak = 0;
       gameManager.resetStreak();
       feedbackEl.innerHTML = `
-        <div style="background: rgba(255, 51, 68, 0.15); border: 1px solid var(--accent-red); border-radius: var(--radius-md); padding: 12px 18px; color: #fca5a5;">
+        <div class="game-feedback-error" style="background: rgba(255, 51, 68, 0.15); border: 1px solid var(--accent-red); border-radius: var(--radius-md); padding: 12px 18px; color: #fca5a5;">
           <strong>✗ Incorrect!</strong> Expected <em>${item.category.toUpperCase()}</em>. ${item.explanation}
         </div>
       `;
@@ -30740,7 +31024,7 @@ function renderWeek1ParadigmSorter(container) {
     setTimeout(() => {
       currentIndex++;
       renderCard();
-    }, 1200);
+    }, 5000);
   }
   renderCard();
 }
@@ -30802,6 +31086,7 @@ function renderWeek1MitchellBuilder(container) {
   let selE = null;
   let selT = null;
   let selP = null;
+  let feedbackHtml = "";
   function render() {
     if (scenarioIdx >= SCENARIOS.length) {
       sound.playVictory();
@@ -30842,7 +31127,7 @@ function renderWeek1MitchellBuilder(container) {
             <h4 style="color: var(--accent-cyan); font-size: 14px; margin-bottom: 12px;">1. Experience (E)</h4>
             <div style="display: flex; flex-direction: column; gap: 8px;">
               ${s.optionsE.map((opt, i) => `
-                <button class="btn btn-secondary opt-btn-e ${selE === i ? "active" : ""}" data-idx="${i}" style="text-align: left; font-size: 12px; padding: 10px; border-radius: 8px; justify-content: flex-start;">
+                <button class="btn btn-secondary mitchell-option opt-btn-e ${selE === i ? "selected" : ""}" data-idx="${i}" aria-pressed="${selE === i}" style="text-align: left; font-size: 12px; padding: 10px; border-radius: 8px; justify-content: flex-start;">
                   ${opt}
                 </button>
               `).join("")}
@@ -30854,7 +31139,7 @@ function renderWeek1MitchellBuilder(container) {
             <h4 style="color: #c084fc; font-size: 14px; margin-bottom: 12px;">2. Task (T)</h4>
             <div style="display: flex; flex-direction: column; gap: 8px;">
               ${s.optionsT.map((opt, i) => `
-                <button class="btn btn-secondary opt-btn-t ${selT === i ? "active" : ""}" data-idx="${i}" style="text-align: left; font-size: 12px; padding: 10px; border-radius: 8px; justify-content: flex-start;">
+                <button class="btn btn-secondary mitchell-option opt-btn-t ${selT === i ? "selected" : ""}" data-idx="${i}" aria-pressed="${selT === i}" style="text-align: left; font-size: 12px; padding: 10px; border-radius: 8px; justify-content: flex-start;">
                   ${opt}
                 </button>
               `).join("")}
@@ -30866,7 +31151,7 @@ function renderWeek1MitchellBuilder(container) {
             <h4 style="color: var(--accent-green); font-size: 14px; margin-bottom: 12px;">3. Performance (P)</h4>
             <div style="display: flex; flex-direction: column; gap: 8px;">
               ${s.optionsP.map((opt, i) => `
-                <button class="btn btn-secondary opt-btn-p ${selP === i ? "active" : ""}" data-idx="${i}" style="text-align: left; font-size: 12px; padding: 10px; border-radius: 8px; justify-content: flex-start;">
+                <button class="btn btn-secondary mitchell-option opt-btn-p ${selP === i ? "selected" : ""}" data-idx="${i}" aria-pressed="${selP === i}" style="text-align: left; font-size: 12px; padding: 10px; border-radius: 8px; justify-content: flex-start;">
                   ${opt}
                 </button>
               `).join("")}
@@ -30874,7 +31159,7 @@ function renderWeek1MitchellBuilder(container) {
           </div>
         </div>
 
-        <div id="mitchell-feedback" style="min-height: 40px; margin-bottom: 16px;"></div>
+        <div id="mitchell-feedback" style="min-height: 40px; margin-bottom: 16px;">${feedbackHtml}</div>
 
         <div style="display: flex; justify-content: flex-end;">
           <button id="btn-verify-mitchell" class="btn btn-primary" ${selE !== null && selT !== null && selP !== null ? "" : "disabled"}>
@@ -30919,25 +31204,28 @@ function renderWeek1MitchellBuilder(container) {
       if (selE === s.correctE && selT === s.correctT && selP === s.correctP) {
         sound.playCorrect();
         gameManager.addScore(100, 50);
-        feedback.innerHTML = `
-          <div style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 12px 16px; color: #a7f3d0;">
+        feedbackHtml = `
+          <div class="game-feedback-success" style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 12px 16px; color: #a7f3d0;">
             <strong>✓ Correct Architecture! (+100 pts)</strong> ${s.explanation}
           </div>
         `;
+        feedback.innerHTML = feedbackHtml;
         setTimeout(() => {
           scenarioIdx++;
           selE = null;
           selT = null;
           selP = null;
+          feedbackHtml = "";
           render();
-        }, 1500);
+        }, 5000);
       } else {
         sound.playWrong();
-        feedback.innerHTML = `
-          <div style="background: rgba(255, 51, 68, 0.15); border: 1px solid var(--accent-red); border-radius: var(--radius-md); padding: 12px 16px; color: #fca5a5;">
+        feedbackHtml = `
+          <div class="game-feedback-error" style="background: rgba(255, 51, 68, 0.15); border: 1px solid var(--accent-red); border-radius: var(--radius-md); padding: 12px 16px; color: #fca5a5;">
             <strong>✗ Not quite!</strong> Review the definitions of Experience E (data), Task T (action), and Performance P (metric).
           </div>
         `;
+        feedback.innerHTML = feedbackHtml;
       }
     });
   }
@@ -33885,7 +34173,7 @@ function renderWeek3DecisionTree(container) {
               
               <!-- Parent Root Node -->
               <div style="display:flex; justify-content:center; margin-bottom: 12px;">
-                <div style="background: rgba(20, 30, 50, 0.9); border: 2px solid var(--accent-cyan); border-radius: 12px; padding: 12px 24px; text-align: center; min-width: 260px;">
+                <div class="decision-tree-node" style="background: rgba(20, 30, 50, 0.9); border: 2px solid var(--accent-cyan); border-radius: 12px; padding: 12px 24px; text-align: center; min-width: 260px;">
                   <strong style="color: #fff; font-size: 14px;">Root: Is Sensor Reading X ≤ ${threshold}?</strong>
                   <div style="font-family:'Fira Code'; font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
                     All 5 Sensors (2 Norm, 3 Faulty) • H = ${parentEntropy.toFixed(3)} • Gini = ${parentGini.toFixed(3)}
@@ -33898,7 +34186,7 @@ function renderWeek3DecisionTree(container) {
                 <!-- Left Branch -->
                 <div style="flex: 1; display:flex; flex-direction:column; align-items:center;">
                   <div style="font-family:'Fira Code'; font-size:12px; color:var(--accent-green); margin-bottom:6px;">YES (X ≤ ${threshold})</div>
-                  <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid ${s.leftH === 0 ? "var(--accent-green)" : "var(--accent-amber)"}; border-radius: 12px; padding: 14px; width: 85%; text-align: center;">
+                  <div class="decision-tree-node" style="background: rgba(15, 23, 42, 0.85); border: 1px solid ${s.leftH === 0 ? "var(--accent-green)" : "var(--accent-amber)"}; border-radius: 12px; padding: 14px; width: 85%; text-align: center;">
                     <div style="font-size: 14px; font-weight: 700; color: #fff;">Left Leaf (${s.left.length} Samples)</div>
                     <div style="font-size: 12px; color: var(--text-secondary); margin: 6px 0;">
                       ${s.leftNorm} Normal, ${s.leftFault} Faulty
@@ -33912,7 +34200,7 @@ function renderWeek3DecisionTree(container) {
                 <!-- Right Branch -->
                 <div style="flex: 1; display:flex; flex-direction:column; align-items:center;">
                   <div style="font-family:'Fira Code'; font-size:12px; color:var(--accent-red); margin-bottom:6px;">NO (X > ${threshold})</div>
-                  <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid ${s.rightH === 0 ? "var(--accent-green)" : "var(--accent-amber)"}; border-radius: 12px; padding: 14px; width: 85%; text-align: center;">
+                  <div class="decision-tree-node" style="background: rgba(15, 23, 42, 0.85); border: 1px solid ${s.rightH === 0 ? "var(--accent-green)" : "var(--accent-amber)"}; border-radius: 12px; padding: 14px; width: 85%; text-align: center;">
                     <div style="font-size: 14px; font-weight: 700; color: #fff;">Right Leaf (${s.right.length} Samples)</div>
                     <div style="font-size: 12px; color: var(--text-secondary); margin: 6px 0;">
                       ${s.rightNorm} Normal, ${s.rightFault} Faulty
@@ -36040,7 +36328,7 @@ function renderWeek4ConfusionDefense(container) {
               <div style="color: var(--text-muted); font-weight: bold; display: flex; align-items: center; justify-content: flex-end;">Actual Neg</div>
               <div style="background: rgba(255, 170, 0, 0.15); border: 1px solid var(--accent-amber); padding: 14px; border-radius: 8px;">
                 <div style="font-size: 11px; color: var(--text-muted);">FALSE POS (FP)</div>
-                <strong style="font-size: 20px; color: #fef08a;">${m.fp}</strong>
+                <strong class="confusion-fp-value" style="font-size: 20px; color: #fef08a;">${m.fp}</strong>
               </div>
               <div style="background: rgba(0, 240, 255, 0.15); border: 1px solid var(--accent-cyan); padding: 14px; border-radius: 8px;">
                 <div style="font-size: 11px; color: var(--text-muted);">TRUE NEG (TN)</div>
@@ -37595,6 +37883,8 @@ var currentSubGame = {
   week4: "confusion",
   week5: "cluster"
 };
+var BEFORE_FLASHCARDS = "flashcards-before";
+var AFTER_FLASHCARDS = "flashcards-after";
 function updateHUD() {
   const s = gameManager.getState();
   const scoreEl = document.getElementById("hud-score");
@@ -37728,23 +38018,83 @@ function renderCurrentView() {
     }
   } else if (NAV_CONFIG[currentTab]) {
     const weekConfig = NAV_CONFIG[currentTab];
+    if (!weekConfig)
+      return;
+    const weekId = currentTab;
+    const firstGame = weekConfig.games[0];
+    if (!firstGame)
+      return;
+    let selectedGame = currentSubGame[weekId] ?? firstGame.id;
+    let weekProgress = gameManager.getWeekProgress(weekId);
+    if (!weekProgress.beforeComplete) {
+      selectedGame = BEFORE_FLASHCARDS;
+    } else if (selectedGame === BEFORE_FLASHCARDS) {
+      selectedGame = firstGame.id;
+    }
+    currentSubGame[weekId] = selectedGame;
+    let allContentComplete = weekConfig.games.every((game) => weekProgress.completedGames.includes(game.id));
+    if (selectedGame === AFTER_FLASHCARDS && !allContentComplete) {
+      selectedGame = weekConfig.games.find((game) => !weekProgress.completedGames.includes(game.id))?.id ?? firstGame.id;
+      currentSubGame[weekId] = selectedGame;
+    }
+    if (weekConfig.games.some((game) => game.id === selectedGame)) {
+      gameManager.markWeekGameVisited(weekId, selectedGame);
+      weekProgress = gameManager.getWeekProgress(weekId);
+    }
     subNavBar.style.display = "flex";
-    subNavBar.innerHTML = weekConfig.games.map((g) => `
-      <button class="sub-nav-btn ${currentSubGame[currentTab] === g.id ? "active" : ""}" data-gameid="${g.id}">
-        ${g.label}
+    const navItems = [
+      { id: BEFORE_FLASHCARDS, label: `Before-week flashcards (${weekProgress.beforeComplete ? "complete" : "start"})`, disabled: weekProgress.beforeComplete },
+      ...weekConfig.games.map((game) => ({ ...game, disabled: !weekProgress.beforeComplete })),
+      { id: AFTER_FLASHCARDS, label: "After-week flashcards", disabled: !allContentComplete }
+    ];
+    subNavBar.innerHTML = navItems.map((item) => `
+      <button class="sub-nav-btn ${selectedGame === item.id ? "active" : ""}" data-gameid="${item.id}" ${item.disabled ? "disabled" : ""}>
+        ${item.label}
       </button>
     `).join("");
     subNavBar.querySelectorAll(".sub-nav-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         sound.playClick();
-        currentSubGame[currentTab] = btn.dataset.gameid;
+        currentSubGame[weekId] = btn.dataset.gameid;
         renderCurrentView();
       });
     });
-    const activeGame = weekConfig.games.find((g) => g.id === currentSubGame[currentTab]) || weekConfig.games[0];
-    if (activeGame) {
-      mainContent.innerHTML = "";
+    mainContent.innerHTML = "";
+    delete mainContent.dataset.flashcardRenderToken;
+    if (selectedGame === BEFORE_FLASHCARDS) {
+      renderWeekFlashcards(mainContent, weekId, "before", () => {
+        currentSubGame[weekId] = firstGame.id;
+        renderCurrentView();
+      });
+    } else if (selectedGame === AFTER_FLASHCARDS) {
+      renderWeekFlashcards(mainContent, weekId, "after");
+    } else {
+      const activeGame = weekConfig.games.find((g) => g.id === selectedGame) || firstGame;
       activeGame.render(mainContent);
+      const isComplete = weekProgress.completedGames.includes(activeGame.id);
+      const lessonFooter = document.createElement("section");
+      lessonFooter.className = "week-lesson-completion";
+      const completionMessage = document.createElement("p");
+      completionMessage.textContent = isComplete ? "Subtask complete. Your progress is saved." : "Finish this subtask, then mark it complete to unlock the after-week flashcards.";
+      const completionButton = document.createElement("button");
+      completionButton.type = "button";
+      completionButton.dataset.completeWeekGame = "";
+      completionButton.className = "btn btn-secondary btn-sm";
+      completionButton.textContent = isComplete ? "Subtask complete ✓" : "Mark subtask complete";
+      completionButton.disabled = isComplete;
+      completionButton.addEventListener("click", () => {
+        gameManager.markWeekGameComplete(weekId, activeGame.id);
+        completionButton.disabled = true;
+        completionButton.textContent = "Subtask complete ✓";
+        completionMessage.textContent = "Subtask complete. Your progress is saved.";
+        const progress = gameManager.getWeekProgress(weekId);
+        const allComplete = weekConfig.games.every((game) => progress.completedGames.includes(game.id));
+        const afterFlashcards = subNavBar.querySelector(`[data-gameid="${AFTER_FLASHCARDS}"]`);
+        if (afterFlashcards)
+          afterFlashcards.disabled = !allComplete;
+      });
+      lessonFooter.append(completionMessage, completionButton);
+      mainContent.appendChild(lessonFooter);
     }
   }
 }
@@ -37762,7 +38112,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         const [t, g] = hash.split(":");
         if (t)
           currentTab = t;
-        if (g)
+        if (t && g)
           currentSubGame[t] = g;
       } else {
         currentTab = hash;
@@ -37784,6 +38134,37 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-sound-toggle")?.addEventListener("click", (e) => {
     sound.enabled = !sound.enabled;
     e.target.textContent = sound.enabled ? "\uD83D\uDD0A" : "\uD83D\uDD07";
+    sound.playClick();
+  });
+  const themeToggle = document.getElementById("btn-theme-toggle");
+  let savedTheme = null;
+  try {
+    savedTheme = localStorage.getItem("csi5155_ml_game_theme");
+  } catch (e) {
+    console.warn("Theme preference could not be loaded:", e);
+  }
+  if (savedTheme === "light") {
+    document.body.dataset.theme = "light";
+  }
+  const updateThemeToggle = () => {
+    const isLight = document.body.dataset.theme === "light";
+    const label = isLight ? "Switch to dark mode" : "Switch to light mode";
+    if (themeToggle) {
+      themeToggle.textContent = isLight ? "\uD83C\uDF19" : "☀️";
+      themeToggle.title = label;
+      themeToggle.setAttribute("aria-label", label);
+    }
+  };
+  updateThemeToggle();
+  themeToggle?.addEventListener("click", () => {
+    const isLight = document.body.dataset.theme !== "light";
+    document.body.dataset.theme = isLight ? "light" : "dark";
+    try {
+      localStorage.setItem("csi5155_ml_game_theme", isLight ? "light" : "dark");
+    } catch (e) {
+      console.warn("Theme preference could not be saved:", e);
+    }
+    updateThemeToggle();
     sound.playClick();
   });
   gameManager.subscribe(updateHUD);
