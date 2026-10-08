@@ -84,6 +84,10 @@ class StateManager {
     };
     this.save();
   }
+  setSoundEnabled(enabled) {
+    this.state.soundEnabled = enabled;
+    this.save();
+  }
   getWeekProgress(weekId) {
     const progress = this.state.weekProgress[weekId];
     return {
@@ -50556,6 +50560,15 @@ function renderWeek4RocAurocSweeper(container) {
     const f1 = 2 * precision * tpr / (precision + tpr || 1);
     return { tp, fp, tn, fn, tpr, fpr, precision, f1 };
   }
+  const sortedThresholds = [1.01, ...Array.from(new Set(samples.map((sample) => sample.prob))).sort((a, b) => b - a), -0.01];
+  const rocPoints = sortedThresholds.map((value) => {
+    const metrics = getMetrics(value);
+    return { fpr: metrics.fpr, tpr: metrics.tpr };
+  });
+  const auroc = rocPoints.slice(1).reduce((area, point, index) => {
+    const previous = rocPoints[index];
+    return area + (point.fpr - previous.fpr) * (point.tpr + previous.tpr) / 2;
+  }, 0);
   function render() {
     const m = getMetrics(threshold);
     container.innerHTML = `
@@ -50742,16 +50755,10 @@ function renderWeek4RocAurocSweeper(container) {
         ctx.lineTo(padX + w, padY);
         ctx.stroke();
         ctx.setLineDash([]);
-        const sortedThresholds = [1.01, ...Array.from(new Set(samples.map((s) => s.prob))).sort((a, b) => b - a), -0.01];
-        const empiricalRocPoints = [];
-        sortedThresholds.forEach((t) => {
-          const res = getMetrics(t);
-          empiricalRocPoints.push({ fpr: res.fpr, tpr: res.tpr });
-        });
         ctx.fillStyle = "rgba(0, 240, 255, 0.08)";
         ctx.beginPath();
         ctx.moveTo(padX, padY + h);
-        empiricalRocPoints.forEach((p) => {
+        rocPoints.forEach((p) => {
           ctx.lineTo(padX + p.fpr * w, padY + h - p.tpr * h);
         });
         ctx.lineTo(padX + w, padY + h);
@@ -50761,7 +50768,7 @@ function renderWeek4RocAurocSweeper(container) {
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(padX, padY + h);
-        empiricalRocPoints.forEach((p) => {
+        rocPoints.forEach((p) => {
           ctx.lineTo(padX + p.fpr * w, padY + h - p.tpr * h);
         });
         ctx.stroke();
@@ -51004,6 +51011,7 @@ init_confetti_module();
 function renderWeek4RegressionMetrics(container) {
   let activeStep = 1;
   let outlierY = 180;
+  let masteryAwarded = Boolean(gameManager.getState().completedGames["week4_regression"]);
   const baselinePoints = [
     { x: 10, y: 35, pred: 38 },
     { x: 20, y: 48, pred: 50 },
@@ -51179,10 +51187,13 @@ function renderWeek4RegressionMetrics(container) {
         const val = b.dataset.val;
         const fb = container.querySelector("#reg-feedback");
         if (val === "correct") {
-          sound.playVictory();
-          confetti_module_default({ particleCount: 50, spread: 60 });
-          gameManager.addScore(100, 50);
-          gameManager.markGameComplete("week4_regression");
+          if (!masteryAwarded) {
+            masteryAwarded = true;
+            sound.playVictory();
+            confetti_module_default({ particleCount: 50, spread: 60 });
+            gameManager.addScore(100, 50);
+            gameManager.markGameComplete("week4_regression");
+          }
           if (fb)
             fb.innerHTML = '<div style="color: var(--accent-green); font-weight: 700;">✓ Correct! MAE is robust against outlier distortion!</div>';
         } else {
@@ -51972,7 +51983,7 @@ function updateHUD() {
 function renderHub(mainContent) {
   const s = gameManager.getState();
   const completedCount = Object.keys(s.completedGames).length;
-  const totalGames = 18;
+  const totalGames = Object.values(NAV_CONFIG).reduce((total, week) => total + week.games.length, 0);
   const progressPct = Math.min(100, Math.round(completedCount / totalGames * 100));
   mainContent.innerHTML = `
     <div class="hub-hero">
@@ -52005,7 +52016,7 @@ function renderHub(mainContent) {
         <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">
           Supervised vs Unsupervised vs RL conveyor rush (Midterm Q1), Mitchell's E/T/P architect, and 3D Vector transformation arena.
         </p>
-        <button class="btn btn-sm btn-secondary">Launch Week 1 (3 Games) →</button>
+        <button class="btn btn-sm btn-secondary">Launch Week 1 (${NAV_CONFIG.week1.games.length} Games) →</button>
       </div>
 
       <!-- Week 2 Card -->
@@ -52015,7 +52026,7 @@ function renderHub(mainContent) {
         <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">
           3D Paraboloid Loss Marble Run (Batch vs SGD, Q2), Regularization Gauntlet (L1 Lasso vs L2 Ridge, Q4), Clinical Sigmoid Triage, and 3D SVM Kernel Warp (Q7).
         </p>
-        <button class="btn btn-sm btn-secondary">Launch Week 2 (4 Games) →</button>
+        <button class="btn btn-sm btn-secondary">Launch Week 2 (${NAV_CONFIG.week2.games.length} Games) →</button>
       </div>
 
       <!-- Week 3 Card -->
@@ -52025,7 +52036,7 @@ function renderHub(mainContent) {
         <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">
           Entropy & Information Gain Guillotine (Sensor Q14), 3D k-NN Cosmic Radar (Q12), Missing Data Detective (Q13), and Class Balancer SMOTE (Q10).
         </p>
-        <button class="btn btn-sm btn-secondary">Launch Week 3 (4 Games) →</button>
+        <button class="btn btn-sm btn-secondary">Launch Week 3 (${NAV_CONFIG.week3.games.length} Games) →</button>
       </div>
 
       <!-- Week 4 Card -->
@@ -52035,7 +52046,7 @@ function renderHub(mainContent) {
         <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">
           Confusion Matrix Air Defense (Precision vs Recall vs F1), Forward Selection vs Backward Elimination (Q6), 3-Way Split Gauntlet (Q9), and 3D PCA SVD Squeezer (Q5).
         </p>
-        <button class="btn btn-sm btn-secondary">Launch Week 4 (4 Games) →</button>
+        <button class="btn btn-sm btn-secondary">Launch Week 4 (${NAV_CONFIG.week4.games.length} Games) →</button>
       </div>
 
       <!-- Week 5 Card -->
@@ -52045,7 +52056,7 @@ function renderHub(mainContent) {
         <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">
           3D K-Means & Dendrogram Linkage Chopper (Q1), Semi-Supervised & Active Learning Oracle, and Ensemble Clash (Bagging vs Boosting, Q11).
         </p>
-        <button class="btn btn-sm btn-secondary">Launch Week 5 (3 Games) →</button>
+        <button class="btn btn-sm btn-secondary">Launch Week 5 (${NAV_CONFIG.week5.games.length} Games) →</button>
       </div>
 
       <!-- Grand Midterm Card -->
@@ -52193,9 +52204,14 @@ window.addEventListener("DOMContentLoaded", async () => {
       switchTab(tab);
     });
   });
-  document.getElementById("btn-sound-toggle")?.addEventListener("click", (e) => {
+  sound.enabled = gameManager.getState().soundEnabled;
+  const soundToggle = document.getElementById("btn-sound-toggle");
+  if (soundToggle)
+    soundToggle.textContent = sound.enabled ? "\uD83D\uDD0A" : "\uD83D\uDD07";
+  soundToggle?.addEventListener("click", (e) => {
     sound.enabled = !sound.enabled;
-    e.target.textContent = sound.enabled ? "\uD83D\uDD0A" : "\uD83D\uDD07";
+    gameManager.setSoundEnabled(sound.enabled);
+    e.currentTarget.textContent = sound.enabled ? "\uD83D\uDD0A" : "\uD83D\uDD07";
     sound.playClick();
   });
   const themeToggle = document.getElementById("btn-theme-toggle");

@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 export function renderWeek4RegressionMetrics(container: HTMLElement) {
   let activeStep = 1;
   let outlierY = 180; // normal range 30-70
+  let masteryAwarded = Boolean(gameManager.getState().completedGames['week4_regression']);
 
   const baselinePoints = [
     { x: 10, y: 35, pred: 38 },
@@ -185,10 +186,13 @@ export function renderWeek4RegressionMetrics(container: HTMLElement) {
         const val = (b as HTMLElement).dataset.val;
         const fb = container.querySelector('#reg-feedback');
         if (val === 'correct') {
-          sound.playVictory();
-          confetti({ particleCount: 50, spread: 60 });
-          gameManager.addScore(100, 50);
-          gameManager.markGameComplete('week4_regression');
+          if (!masteryAwarded) {
+            masteryAwarded = true;
+            sound.playVictory();
+            confetti({ particleCount: 50, spread: 60 });
+            gameManager.addScore(100, 50);
+            gameManager.markGameComplete('week4_regression');
+          }
           if (fb) fb.innerHTML = '<div style="color: var(--accent-green); font-weight: 700;">✓ Correct! MAE is robust against outlier distortion!</div>';
         } else {
           sound.playWrong();

@@ -94,6 +94,11 @@ class StateManager {
     this.save();
   }
 
+  setSoundEnabled(enabled: boolean) {
+    this.state.soundEnabled = enabled;
+    this.save();
+  }
+
   getWeekProgress(weekId: string) {
     const progress = this.state.weekProgress[weekId];
     return {

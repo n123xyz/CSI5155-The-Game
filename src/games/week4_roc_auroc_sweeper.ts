@@ -38,6 +38,16 @@ export function renderWeek4RocAurocSweeper(container: HTMLElement) {
     return { tp, fp, tn, fn, tpr, fpr, precision, f1 };
   }
 
+  const sortedThresholds = [1.01, ...Array.from(new Set(samples.map(sample => sample.prob))).sort((a, b) => b - a), -0.01];
+  const rocPoints = sortedThresholds.map(value => {
+    const metrics = getMetrics(value);
+    return { fpr: metrics.fpr, tpr: metrics.tpr };
+  });
+  const auroc = rocPoints.slice(1).reduce((area, point, index) => {
+    const previous = rocPoints[index]!;
+    return area + (point.fpr - previous.fpr) * (point.tpr + previous.tpr) / 2;
+  }, 0);
+
   function render() {
     const m = getMetrics(threshold);
 
@@ -238,18 +248,11 @@ export function renderWeek4RocAurocSweeper(container: HTMLElement) {
 
         // Empirical Data-Derived ROC Curve from actual sample thresholds
         // Sort distinct score thresholds and sweep FPR & TPR steps
-        const sortedThresholds = [1.01, ...Array.from(new Set(samples.map(s => s.prob))).sort((a, b) => b - a), -0.01];
-        const empiricalRocPoints: { fpr: number; tpr: number }[] = [];
-        sortedThresholds.forEach(t => {
-          const res = getMetrics(t);
-          empiricalRocPoints.push({ fpr: res.fpr, tpr: res.tpr });
-        });
-
         // Fill area under empirical curve
         ctx.fillStyle = 'rgba(0, 240, 255, 0.08)';
         ctx.beginPath();
         ctx.moveTo(padX, padY + h);
-        empiricalRocPoints.forEach(p => {
+        rocPoints.forEach(p => {
           ctx.lineTo(padX + p.fpr * w, padY + h - p.tpr * h);
         });
         ctx.lineTo(padX + w, padY + h);
@@ -261,7 +264,7 @@ export function renderWeek4RocAurocSweeper(container: HTMLElement) {
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(padX, padY + h);
-        empiricalRocPoints.forEach(p => {
+        rocPoints.forEach(p => {
           ctx.lineTo(padX + p.fpr * w, padY + h - p.tpr * h);
         });
         ctx.stroke();
