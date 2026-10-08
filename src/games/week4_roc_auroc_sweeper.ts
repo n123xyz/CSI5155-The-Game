@@ -75,7 +75,7 @@ export function renderWeek4RocAurocSweeper(container: HTMLElement) {
           <div style="animation: fadeIn 0.3s ease;">
             <div class="controls-panel" style="margin-bottom: 16px;">
               <div class="control-item" style="flex: 1;">
-                <label>Decision Threshold \(\\tau\): <span id="tau-val" style="color: var(--accent-cyan); font-weight: bold;">${threshold.toFixed(2)}</span></label>
+                <label>Decision Threshold \\(\\tau\\): <span id="tau-val" style="color: var(--accent-cyan); font-weight: bold;">${threshold.toFixed(2)}</span></label>
                 <input type="range" id="tau-slider" min="0.05" max="0.95" step="0.05" value="${threshold}" style="width: 100%;">
               </div>
               <div class="control-item">
@@ -122,7 +122,7 @@ export function renderWeek4RocAurocSweeper(container: HTMLElement) {
                 </div>
 
                 <div style="background: rgba(0,0,0,0.4); padding: 8px 12px; border-radius: 4px; font-size: 11px; color: var(--text-muted);">
-                  Lowering \(\tau \to 0\) pushes Recall \(\to 1.0\) but spikes False Positives!
+                  Lowering \\(\\tau \\to 0\\) pushes Recall \\(\\to 1.0\\) but spikes False Positives!
                 </div>
               </div>
             </div>
@@ -153,7 +153,7 @@ export function renderWeek4RocAurocSweeper(container: HTMLElement) {
               <div style="background: rgba(255, 51, 68, 0.05); border: 1px solid rgba(255, 51, 68, 0.2); padding: 14px; border-radius: var(--radius-md);">
                 <div style="font-size: 12px; font-weight: 700; color: var(--accent-red);">AUROC &lt; 0.50</div>
                 <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
-                  <strong>Inverted Predictions:</strong> Model has learned the pattern in reverse! Flipping class labels yields \(1 - \text{AUROC}\).
+                  <strong>Inverted Predictions:</strong> Model has learned the pattern in reverse! Flipping class labels yields \\(1 - \\text{AUROC}\\).
                 </div>
               </div>
             </div>

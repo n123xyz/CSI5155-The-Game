@@ -507,7 +507,7 @@ export function renderWeek5EnsembleClash(container: HTMLElement) {
                 <p style="font-size:13px; line-height:1.6; color:#fff;">
                   <strong>Official Exam Solution:</strong> <strong>BOOSTING</strong> is the preferred approach.
                   <br>• <strong>Boosting Mechanism:</strong> Base models are trained <em>sequentially</em>. Each successive weak learner fits the residual errors (in Gradient Boosting) or re-weighted misclassifications (in AdaBoost) of the previous ensemble. This sequential correction directly converts a high-bias weak model into an arbitrarily complex low-bias ensemble.
-                  <br>• <strong>Bagging Mechanism:</strong> Bagging trains independent models in <em>parallel</em> on bootstrap samples and averages predictions. The mathematical expectation of an average is the expectation of the base learner: $\\mathbb{E}[\\bar{f}] = \\mathbb{E}[f_{base}]$. Thus, <strong>Bagging does NOT reduce bias</strong>; its sole mechanism is reducing variance ($\text{Var} \\approx \\rho \\sigma^2 + \\frac{1-\\rho}{B}\\sigma^2$) for deep high-variance trees!
+                  <br>• <strong>Bagging Mechanism:</strong> Bagging trains independent models in <em>parallel</em> on bootstrap samples and averages predictions. The mathematical expectation of an average is the expectation of the base learner: $\\mathbb{E}[\\bar{f}] = \\mathbb{E}[f_{base}]$. Thus, <strong>Bagging does NOT reduce bias</strong>; its sole mechanism is reducing variance ($\\text{Var} \\approx \\rho \\sigma^2 + \\frac{1-\\rho}{B}\\sigma^2$) for deep high-variance trees!
                 </p>
               </div>
             ` : ''}
@@ -699,9 +699,9 @@ export function renderWeek5EnsembleClash(container: HTMLElement) {
         <details class="math-explainer">
         <summary>💡 Week 5 Slide Insights: Bagging vs Boosting & Gradient Residual Optimization (Click to expand)</summary>
         <div class="explainer-content">
-          <p><strong>Bagging (Variance Reduction):</strong> Trains $B$ independent learners in parallel on bootstrap samples. Variance reduces as $\text{Var} = \rho \sigma^2 + \frac{1-\rho}{B}\sigma^2$. Bias is untouched!</p>
-          <p><strong>AdaBoost (Sequential Re-weighting):</strong> Focuses on hard samples by multiplying misclassified sample weights by $e^{\alpha_m}$ and correctly classified by $e^{-\alpha_m}$ where $\alpha_m = \frac{1}{2}\ln\left(\frac{1 - \epsilon_m}{\epsilon_m}\right)$.</p>
-          <p><strong>Gradient Boosting (Pseudo-Residuals):</strong> Minimizes loss $\mathcal{L}(y, f(x))$ by training each new regression tree directly on the negative gradient (residuals): $r_{im} = -\left[\frac{\partial \mathcal{L}(y_i, f(x_i))}{\partial f(x_i)}\right]$.</p>
+          <p><strong>Bagging (Variance Reduction):</strong> Trains $B$ independent learners in parallel on bootstrap samples. Variance reduces as $\\text{Var} = \\rho \\sigma^2 + \\frac{1-\\rho}{B}\\sigma^2$. Bias is untouched!</p>
+          <p><strong>AdaBoost (Sequential Re-weighting):</strong> Focuses on hard samples by multiplying misclassified sample weights by $e^{\\alpha_m}$ and correctly classified by $e^{-\\alpha_m}$ where $\\alpha_m = \\frac{1}{2}\\ln\\left(\\frac{1 - \\epsilon_m}{\\epsilon_m}\\right)$.</p>
+          <p><strong>Gradient Boosting (Pseudo-Residuals):</strong> Minimizes loss $\\mathcal{L}(y, f(x))$ by training each new regression tree directly on the negative gradient (residuals): $r_{im} = -\\left[\\frac{\\partial \\mathcal{L}(y_i, f(x_i))}{\\partial f(x_i)}\\right]$.</p>
           <div class="formula-block">
             AdaBoost Update: w_{i}^{(m+1)} = (w_i^{(m)} / Z_m) · exp(-α_m y_i h_m(x_i))<br>
             Gradient Boosting: f_m(x) = f_{m-1}(x) + α · γ_m(x), where r_n = y_n - f_{m-1}(x_n)

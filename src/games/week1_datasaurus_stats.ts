@@ -249,9 +249,9 @@ export function renderWeek1DatasaurusStats(container: HTMLElement) {
           <div class="explainer-content">
             <p><strong>Datasaurus Dozen (Alberto Cairo, 2016):</strong> Created to demonstrate the importance of visualizing data rather than blindly relying on low-order summary statistics. An entire family of 12 distinct datasets share nearly identical:</p>
             <ul>
-              <li>Mean: \(\bar{x} = 54.26, \bar{y} = 47.83\)</li>
-              <li>Standard Deviation: \(s_x = 16.76, s_y = 26.93\)</li>
-              <li>Pearson correlation: \(r = -0.06\)</li>
+              <li>Mean: \\(\\bar{x} = 54.26, \\bar{y} = 47.83\\)</li>
+              <li>Standard Deviation: \\(s_x = 16.76, s_y = 26.93\\)</li>
+              <li>Pearson correlation: \\(r = -0.06\\)</li>
             </ul>
             <div class="formula-block">
               Pearson Correlation: r = ∑ (x_i - x̄)(y_i - ȳ) / [ √(∑(x_i - x̄)²) · √(∑(y_i - ȳ)²) ]

@@ -95,6 +95,28 @@ async function runTest() {
     }
     await page.click('[data-start-week]');
     await page.waitForFunction(() => !document.querySelector('.sub-nav-btn[data-gameid="paradigms"]')?.hasAttribute('disabled'));
+    await page.click('.sub-nav-btn[data-gameid="datasaurus"]');
+    await page.locator('.formula-block .katex-display').first().waitFor({ state: 'attached' });
+    if (await page.locator('.formula-block .katex-error').count()) {
+      throw new Error('A Datasaurus formula failed to render with KaTeX.');
+    }
+    await page.click('.step-dot[data-step="2"]');
+    await page.waitForFunction(() => document.querySelectorAll('.formula-block .katex-display').length >= 2);
+    if (await page.locator('.formula-block .katex-error').count()) {
+      throw new Error('The sum-rule or product-rule formula failed to render with KaTeX.');
+    }
+    if (!(await page.locator('.formula-block .katex annotation[encoding="application/x-tex"]').first().textContent())?.includes('\\sum')) {
+      throw new Error('The sum-rule equation did not preserve its summation in rendered math.');
+    }
+    await page.click('.step-dot[data-step="1"]');
+    await page.waitForFunction(() => document.querySelectorAll('.formula-block .katex-display').length >= 1);
+    if (await page.locator('.math-explainer li .katex').count() < 3) {
+      throw new Error('Inline equations in the Datasaurus deep dive were not typeset.');
+    }
+    const datasaurusInlineMath = await page.locator('.math-explainer li .katex annotation[encoding="application/x-tex"]').allTextContents();
+    if (!datasaurusInlineMath.some(tex => tex.includes('\\bar{x}'))) {
+      throw new Error('The Datasaurus mean equation did not preserve its overbar notation.');
+    }
     for (const gameId of ['paradigms', 'mitchell', 'datasaurus', 'vector', 'bayes']) {
       await page.click(`.sub-nav-btn[data-gameid="${gameId}"]`);
     }
@@ -137,6 +159,52 @@ async function runTest() {
         throw new Error(`${week} loaded an unexpected number of flashcards.`);
       }
     }
+    const auditPage = await browser.newPage();
+    await auditPage.addInitScript(() => {
+      const weekProgress = Object.fromEntries(
+        ['week1', 'week2', 'week3', 'week4', 'week5'].map(week => [
+          week,
+          { beforeComplete: true, afterComplete: false, visitedGames: [], completedGames: [] },
+        ]),
+      );
+      localStorage.setItem('csi5155_ml_game_state_v1', JSON.stringify({ weekProgress }));
+    });
+    await auditPage.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle' });
+    for (const week of ['week1', 'week2', 'week3', 'week4', 'week5']) {
+      await auditPage.click(`button[data-tab="${week}"]`);
+      const gameIds = await auditPage.locator('.sub-nav-btn').evaluateAll(buttons =>
+        buttons.map(button => (button as HTMLElement).dataset.gameid)
+          .filter((id): id is string => Boolean(id && !id.startsWith('flashcards-'))),
+      );
+      for (const gameId of gameIds) {
+        await auditPage.click(`.sub-nav-btn[data-gameid="${gameId}"]`);
+        await auditPage.waitForTimeout(40);
+        const assertMathRendered = async () => {
+          const mathIssues = await auditPage.locator('.formula-block').evaluateAll(blocks =>
+            blocks.flatMap((block, index) => {
+              const text = block.textContent ?? '';
+              const hasMath = /[=≤≥≠∑√Σ∏∫πθμσ∈]|argmax|argmin|[_^]/u.test(text);
+              return hasMath && !block.querySelector('.katex') ? [`${index}: ${text}`] : [];
+            }),
+          );
+          const errors = await auditPage.locator('.katex-error').allTextContents();
+          if (mathIssues.length || errors.length) {
+            throw new Error(`${week}/${gameId} contains formulas that failed KaTeX rendering: ${mathIssues.join(' | ')} ${errors.join(' | ')}`);
+          }
+        };
+        await assertMathRendered();
+        const stepCount = await auditPage.locator('.step-dot').count();
+        for (let step = 1; step <= stepCount; step++) {
+          const stepButton = auditPage.locator(`.step-dot[data-step="${step}"]`);
+          if (await stepButton.count()) {
+            await stepButton.click();
+            await auditPage.waitForTimeout(20);
+            await assertMathRendered();
+          }
+        }
+      }
+    }
+    await auditPage.close();
     console.log('✓ All five weekly decks and the complete Week 1 flow verified.');
 
     console.log('Clicking Midterm Practice Exam tab...');
@@ -255,6 +323,9 @@ async function runTest() {
     console.log(`Solutions revealed count: ${solutionCount}`);
     if (solutionCount < 14) {
       throw new Error(`Expected 14 solution explainers, found ${solutionCount}`);
+    }
+    if (await page.locator('.katex-error').count()) {
+      throw new Error('A midterm equation failed to render with KaTeX.');
     }
     console.log('✓ All 14 solution derivations successfully rendered!');
 

@@ -64,7 +64,7 @@ export function renderWeek2BiasVarianceDartboard(container: HTMLElement) {
               <div class="game-viewport" style="height: 320px;">
                 <canvas id="dart-canvas" width="600" height="320" style="width: 100%; height: 100%;"></canvas>
                 <div class="viewport-overlay">
-                  Bullseye Target = True Underlying Distribution \(f^*(x)\)
+                  Bullseye Target = True Underlying Distribution \\(f^*(x)\\)
                 </div>
               </div>
 
@@ -91,7 +91,7 @@ export function renderWeek2BiasVarianceDartboard(container: HTMLElement) {
           <div style="animation: fadeIn 0.3s ease;">
             <div class="controls-panel" style="margin-bottom: 16px;">
               <div class="control-item" style="flex: 1;">
-                <label>Model Capacity / Polynomial Degree \(M\): <span id="cap-val" style="color: var(--accent-cyan); font-weight: bold;">${modelCapacity}</span></label>
+                <label>Model Capacity / Polynomial Degree \\(M\\): <span id="cap-val" style="color: var(--accent-cyan); font-weight: bold;">${modelCapacity}</span></label>
                 <input type="range" id="cap-slider" min="1" max="9" step="1" value="${modelCapacity}" style="width: 100%;">
               </div>
               <div class="control-item">
