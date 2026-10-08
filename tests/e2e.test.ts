@@ -64,6 +64,16 @@ async function runTest() {
     if (await page.locator('.flashcard-answer').isVisible()) {
       throw new Error('Flashcard answer was visible before it was revealed.');
     }
+    const mathPage = await browser.newPage();
+    await mathPage.goto(`http://localhost:${PORT}/#week2`, { waitUntil: 'networkidle' });
+    await mathPage.click('button[data-tab="week2"]');
+    await mathPage.click('[data-reveal]');
+    await mathPage.click('[data-rate="known"]');
+    await mathPage.click('[data-reveal]');
+    if (!(await mathPage.locator('.flashcard-display-math .katex-display').count())) {
+      throw new Error('Display math was not rendered with KaTeX.');
+    }
+    await mathPage.close();
     if (!(await page.locator('.sub-nav-btn[data-gameid="paradigms"]').isDisabled())) {
       throw new Error('Week content should remain locked during the before-week deck.');
     }
@@ -71,6 +81,12 @@ async function runTest() {
     for (let i = 0; i < 11; i++) {
       await page.click('[data-reveal]');
       await page.waitForSelector('[data-rate="known"]');
+      if (i === 0) {
+        const inlineMath = page.locator('.flashcard-answer .katex').first();
+        if (!(await inlineMath.count()) || !(await inlineMath.evaluate(el => getComputedStyle(el).fontFamily.includes('KaTeX_Main')))) {
+          throw new Error('Inline math was not rendered with KaTeX styles.');
+        }
+      }
       await page.click('[data-rate="known"]');
     }
     await page.waitForSelector('.flashcard-complete');

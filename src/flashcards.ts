@@ -1,4 +1,5 @@
 import { gameManager } from './state';
+import katex from 'katex';
 
 type Phase = 'before' | 'after';
 
@@ -25,23 +26,44 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function renderInline(markdown: string): string {
+interface MathExpression {
+  html: string;
+  display: boolean;
+}
+
+function renderInline(markdown: string, expressions: MathExpression[]): string {
   let text = escapeHtml(markdown);
   text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
   text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
-  text = text.replace(/\$([^$\n]+)\$/g, '<span class="flashcard-math">$1</span>');
+  text = text.replace(/\u0000MATH_(\d+)\u0000/g, (token, index: string) => {
+    const expression = expressions[Number(index)];
+    return expression?.html ?? token;
+  });
   return text;
 }
 
 function renderMarkdown(markdown: string): string {
+  const expressions: MathExpression[] = [];
+  const createMathToken = (latex: string, display: boolean) => {
+    const index = expressions.push({
+      html: katex.renderToString(latex.trim(), { displayMode: display, throwOnError: false }),
+      display,
+    }) - 1;
+    return `\u0000MATH_${index}\u0000`;
+  };
+  const tokenizedMarkdown = markdown
+    .replace(/\$\$([\s\S]+?)\$\$/g, (_, latex: string) => createMathToken(latex, true))
+    .replace(/(?<!\\)\$([^$\n]+?)\$/g, (_, latex: string) => createMathToken(latex, false));
+
   const blocks: string[] = [];
   let paragraph: string[] = [];
   let listItems: Array<{ ordered: boolean; text: string }> = [];
+  const mathTokenPattern = /^\u0000MATH_(\d+)\u0000$/;
 
   const flushParagraph = () => {
     if (paragraph.length) {
-      blocks.push(`<p>${paragraph.map(renderInline).join('<br>')}</p>`);
+      blocks.push(`<p>${paragraph.map(line => renderInline(line, expressions)).join('<br>')}</p>`);
       paragraph = [];
     }
   };
@@ -51,12 +73,23 @@ function renderMarkdown(markdown: string): string {
       if (!firstItem) return;
       const ordered = firstItem.ordered;
       const tag = ordered ? 'ol' : 'ul';
-      blocks.push(`<${tag}>${listItems.map(item => `<li>${renderInline(item.text)}</li>`).join('')}</${tag}>`);
+      blocks.push(`<${tag}>${listItems.map(item => `<li>${renderInline(item.text, expressions)}</li>`).join('')}</${tag}>`);
       listItems = [];
     }
   };
 
-  for (const line of markdown.split(/\r?\n/)) {
+  for (const line of tokenizedMarkdown.split(/\r?\n/)) {
+    const mathToken = line.trim().match(mathTokenPattern);
+    if (mathToken?.[1] !== undefined) {
+      const expression = expressions[Number(mathToken[1])];
+      if (expression?.display) {
+        flushParagraph();
+        flushList();
+        blocks.push(`<div class="flashcard-display-math">${expression.html}</div>`);
+        continue;
+      }
+    }
+
     const listItem = line.match(/^\s*(?:([-*])|(\d+\.))\s+(.+)$/);
     if (listItem?.[3] !== undefined) {
       flushParagraph();
