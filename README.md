@@ -65,6 +65,10 @@ The end-to-end tests use Playwright. If its bundled Chromium is unavailable in y
 - **KaTeX** for mathematical notation in flashcards
 - **Playwright** for browser-based end-to-end testing
 
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
 ## Project layout
 
 ```text
@@ -81,4 +85,5 @@ src/
 tests/
   e2e.test.ts     # End-to-end tests
 screenshots/      # App screenshots used in this README
+LICENSE           # MIT License
 ```
