@@ -179,6 +179,20 @@ async function runTest() {
       for (const gameId of gameIds) {
         await auditPage.click(`.sub-nav-btn[data-gameid="${gameId}"]`);
         await auditPage.waitForTimeout(40);
+        const assertCorrectAnswersAreNotFirst = async () => {
+          const correctlyOrdered = await auditPage.locator('.quiz-options').evaluateAll(groups =>
+            groups.every(group => {
+              const firstOption = group.querySelector<HTMLElement>(':scope > .quiz-option-btn');
+              if (!firstOption) return true;
+              const value = firstOption.dataset.val ?? '';
+              return firstOption.dataset.correct !== 'true' && value !== 'correct' && !value.endsWith('_correct');
+            }),
+          );
+          if (!correctlyOrdered) {
+            throw new Error(`${week}/${gameId} displays a marked correct answer first.`);
+          }
+        };
+        await assertCorrectAnswersAreNotFirst();
         const assertMathRendered = async () => {
           const mathIssues = await auditPage.locator('.formula-block').evaluateAll(blocks =>
             blocks.flatMap((block, index) => {
@@ -199,6 +213,7 @@ async function runTest() {
           if (await stepButton.count()) {
             await stepButton.click();
             await auditPage.waitForTimeout(20);
+            await assertCorrectAnswersAreNotFirst();
             await assertMathRendered();
           }
         }
@@ -216,6 +231,17 @@ async function runTest() {
     for (let i = 1; i <= 14; i++) {
       const qCard = await page.$(`#question-${i}`);
       if (!qCard) throw new Error(`Question ${i} card not found!`);
+    }
+    const midtermAnswersAreNotFirst = await page.locator('.quiz-options').evaluateAll(groups =>
+      groups.every(group => {
+        const firstOption = group.querySelector<HTMLElement>(':scope > .quiz-option-btn');
+        if (!firstOption) return true;
+        const value = firstOption.dataset.val ?? '';
+        return firstOption.dataset.correct !== 'true' && value !== 'correct' && !value.endsWith('_correct');
+      }),
+    );
+    if (!midtermAnswersAreNotFirst) {
+      throw new Error('The midterm displays a marked correct answer first.');
     }
     console.log('All 14 questions found in DOM!');
 
