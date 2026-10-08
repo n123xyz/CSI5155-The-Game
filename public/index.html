@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSI 5155: Machine Learning - The Gauntlet</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=Outfit:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app">
+    <!-- Top HUD Navigation -->
+    <header class="hud-header">
+      <div class="hud-brand">
+        <div class="logo-icon">⚡</div>
+        <div class="brand-text">
+          <span class="course-code">uOttawa CSI 5155</span>
+          <h1 class="game-title">ML GAUNTLET <span class="badge-pill">Midterm 2026</span></h1>
+        </div>
+      </div>
+
+      <div class="hud-stats">
+        <div class="stat-pill score-pill">
+          <span class="stat-label">SCORE</span>
+          <span id="hud-score" class="stat-value">0</span>
+        </div>
+        <div class="stat-pill xp-pill">
+          <span class="stat-label">XP</span>
+          <span id="hud-xp" class="stat-value">0</span>
+        </div>
+        <div class="stat-pill streak-pill">
+          <span class="stat-label">STREAK</span>
+          <span id="hud-streak" class="stat-value">0🔥</span>
+        </div>
+        <button id="btn-sound-toggle" class="btn-icon" title="Toggle Sound">🔊</button>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs-container">
+      <div class="nav-tabs" id="nav-tabs">
+        <button class="nav-tab active" data-tab="hub">
+          <span class="tab-num">★</span> Hub Overview
+        </button>
+        <button class="nav-tab" data-tab="week1">
+          <span class="tab-num">W1</span> Foundations & Paradigms
+        </button>
+        <button class="nav-tab" data-tab="week2">
+          <span class="tab-num">W2</span> Regression & SVM
+        </button>
+        <button class="nav-tab" data-tab="week3">
+          <span class="tab-num">W3</span> Trees, k-NN & Imbalance
+        </button>
+        <button class="nav-tab" data-tab="week4">
+          <span class="tab-num">W4</span> Pipeline & Metrics
+        </button>
+        <button class="nav-tab" data-tab="week5">
+          <span class="tab-num">W5</span> Clustering & Ensembles
+        </button>
+        <button class="nav-tab highlight-tab" data-tab="midterm">
+          <span class="tab-num">📝</span> Midterm Practice Exam
+        </button>
+      </div>
+    </nav>
+
+    <!-- Sub-Game Navigation Bar (dynamically populated when on week tabs) -->
+    <div id="sub-nav-bar" class="sub-nav-bar"></div>
+
+    <!-- Main Game / View Container -->
+    <main id="main-content" class="main-content">
+      <!-- Injected views go here -->
+    </main>
+
+    <!-- Floating Global Modal / Alert Container -->
+    <div id="game-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 id="modal-title">Victory!</h3>
+          <button id="modal-close" class="modal-close">&times;</button>
+        </div>
+        <div id="modal-body" class="modal-body"></div>
+        <div class="modal-footer">
+          <button id="modal-btn-confirm" class="btn btn-primary">Continue</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/bundle.js"></script>
+</body>
+</html>

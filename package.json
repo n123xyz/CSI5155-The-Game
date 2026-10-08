@@ -1,0 +1,24 @@
+{
+  "name": "midterm-the-game",
+  "module": "server.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "bun build src/main.ts --outfile public/bundle.js",
+    "start": "bun run server.ts",
+    "test:e2e": "bun run tests/e2e.test.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/three": "^0.186.0",
+    "playwright": "^1.64.0"
+  },
+  "peerDependencies": {
+    "typescript": "^7"
+  },
+  "dependencies": {
+    "canvas-confetti": "^1.9.4",
+    "three": "^0.186.1"
+  }
+}
