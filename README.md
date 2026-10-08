@@ -4,8 +4,6 @@ An interactive study game for learning and reviewing machine-learning concepts f
 
 ## Screenshots
 
-These examples show interactive lessons and visualizations—not quiz or exam screens.
-
 <table>
   <tr>
     <td align="center">
