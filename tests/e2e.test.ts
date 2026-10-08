@@ -21,7 +21,9 @@ const server = serve({
       if (!buildResult.success) {
         return new Response('Build failed: ' + JSON.stringify(buildResult.logs), { status: 500 });
       }
-      return new Response(await buildResult.outputs[0].arrayBuffer(), {
+      const bundle = buildResult.outputs[0];
+      if (!bundle) return new Response('Build produced no bundle output', { status: 500 });
+      return new Response(await bundle.arrayBuffer(), {
         headers: { 'Content-Type': 'application/javascript' }
       });
     }
@@ -38,12 +40,104 @@ const server = serve({
 console.log(`Test server running at http://localhost:${PORT}`);
 
 async function runTest() {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+      : {}),
+  });
   const page = await browser.newPage();
 
   try {
     console.log('Navigating to game...');
     await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle' });
+
+    console.log('Checking the weekly before-and-after flashcard flow...');
+    await page.click('button[data-tab="week1"]');
+    await page.waitForSelector('.flashcard-deck');
+    if (!(await page.locator('.flashcard-card-number').textContent())?.includes('CARD 001')) {
+      throw new Error('Week 1 did not begin with CARD 001.');
+    }
+    if (!(await page.locator('.flashcard-content').first().textContent())?.includes('What is Tom Mitchell’s formal operational definition')) {
+      throw new Error('CARD 001 front does not match the source deck.');
+    }
+    if (await page.locator('.flashcard-answer').isVisible()) {
+      throw new Error('Flashcard answer was visible before it was revealed.');
+    }
+    const mathPage = await browser.newPage();
+    await mathPage.goto(`http://localhost:${PORT}/#week2`, { waitUntil: 'networkidle' });
+    await mathPage.click('button[data-tab="week2"]');
+    await mathPage.click('[data-reveal]');
+    await mathPage.click('[data-rate="known"]');
+    await mathPage.click('[data-reveal]');
+    if (!(await mathPage.locator('.flashcard-display-math .katex-display').count())) {
+      throw new Error('Display math was not rendered with KaTeX.');
+    }
+    await mathPage.close();
+    if (!(await page.locator('.sub-nav-btn[data-gameid="paradigms"]').isDisabled())) {
+      throw new Error('Week content should remain locked during the before-week deck.');
+    }
+
+    for (let i = 0; i < 11; i++) {
+      await page.click('[data-reveal]');
+      await page.waitForSelector('[data-rate="known"]');
+      if (i === 0) {
+        const inlineMath = page.locator('.flashcard-answer .katex').first();
+        if (!(await inlineMath.count()) || !(await inlineMath.evaluate(el => getComputedStyle(el).fontFamily.includes('KaTeX_Main')))) {
+          throw new Error('Inline math was not rendered with KaTeX styles.');
+        }
+      }
+      await page.click('[data-rate="known"]');
+    }
+    await page.waitForSelector('.flashcard-complete');
+    if (!(await page.locator('.flashcard-complete').textContent())?.includes('Your week content is now unlocked.')) {
+      throw new Error('Completing the first deck did not unlock week content.');
+    }
+    await page.click('[data-start-week]');
+    await page.waitForFunction(() => !document.querySelector('.sub-nav-btn[data-gameid="paradigms"]')?.hasAttribute('disabled'));
+    for (const gameId of ['paradigms', 'mitchell', 'datasaurus', 'vector', 'bayes']) {
+      await page.click(`.sub-nav-btn[data-gameid="${gameId}"]`);
+    }
+    if (!(await page.locator('.sub-nav-btn[data-gameid="flashcards-after"]').isDisabled())) {
+      throw new Error('The after-week deck should remain locked until every subtask is marked complete.');
+    }
+    for (const gameId of ['paradigms', 'mitchell', 'datasaurus', 'vector', 'bayes']) {
+      await page.click(`.sub-nav-btn[data-gameid="${gameId}"]`);
+      await page.click('[data-complete-week-game]');
+    }
+    if (await page.locator('.sub-nav-btn[data-gameid="flashcards-after"]').isDisabled()) {
+      throw new Error('The after-week deck did not unlock after completing all week content.');
+    }
+    await page.click('.sub-nav-btn[data-gameid="flashcards-after"]');
+    await page.waitForSelector('.flashcard-deck');
+    if (!(await page.locator('.flashcard-card-number').textContent())?.includes('CARD 001')) {
+      throw new Error('The after-week deck did not repeat the source cards.');
+    }
+    for (let i = 0; i < 11; i++) {
+      await page.click('[data-reveal]');
+      await page.waitForSelector('[data-rate="known"]');
+      await page.click('[data-rate="known"]');
+    }
+    await page.waitForSelector('.flashcard-complete');
+    if (!(await page.locator('.flashcard-complete').textContent())?.includes('before-and-after flashcard rounds are complete')) {
+      throw new Error('Completing the second deck did not finish the weekly flashcard flow.');
+    }
+    for (const [week, count, firstCard] of [
+      ['week2', '14', 'CARD 012'],
+      ['week3', '15', 'CARD 026'],
+      ['week4', '10', 'CARD 041'],
+      ['week5', '14', 'CARD 051'],
+    ]) {
+      await page.click(`button[data-tab="${week}"]`);
+      await page.waitForSelector('.flashcard-deck');
+      if (await page.locator('.flashcard-card-number').textContent() !== firstCard) {
+        throw new Error(`${week} did not load its first source-deck card.`);
+      }
+      if (await page.locator('[role="progressbar"]').getAttribute('aria-valuemax') !== count) {
+        throw new Error(`${week} loaded an unexpected number of flashcards.`);
+      }
+    }
+    console.log('✓ All five weekly decks and the complete Week 1 flow verified.');
 
     console.log('Clicking Midterm Practice Exam tab...');
     await page.click('button[data-tab="midterm"]');

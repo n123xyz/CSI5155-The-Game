@@ -4,6 +4,8 @@ export interface PlayerState {
   streak: number;
   completedGames: Record<string, boolean>;
   quizScores: Record<string, { score: number; maxScore: number; date: string }>;
+  flashcardRuns: Record<string, { ratedCards: Record<string, boolean> }>;
+  weekProgress: Record<string, { beforeComplete: boolean; afterComplete: boolean; visitedGames: string[]; completedGames: string[] }>;
   currentWeek: string;
   soundEnabled: boolean;
 }
@@ -22,7 +24,18 @@ class StateManager {
     try {
       const data = localStorage.getItem(STORAGE_KEY);
       if (data) {
-        return JSON.parse(data);
+        const saved = JSON.parse(data) as Partial<PlayerState>;
+        return {
+          score: saved.score ?? 0,
+          xp: saved.xp ?? 0,
+          streak: saved.streak ?? 0,
+          completedGames: saved.completedGames ?? {},
+          quizScores: saved.quizScores ?? {},
+          flashcardRuns: saved.flashcardRuns ?? {},
+          weekProgress: saved.weekProgress ?? {},
+          currentWeek: saved.currentWeek ?? 'hub',
+          soundEnabled: saved.soundEnabled ?? true,
+        };
       }
     } catch (e) {
       console.warn('LocalStorage error:', e);
@@ -33,6 +46,8 @@ class StateManager {
       streak: 0,
       completedGames: {},
       quizScores: {},
+      flashcardRuns: {},
+      weekProgress: {},
       currentWeek: 'hub',
       soundEnabled: true,
     };
@@ -75,6 +90,59 @@ class StateManager {
       score,
       maxScore,
       date: new Date().toISOString(),
+    };
+    this.save();
+  }
+
+  getWeekProgress(weekId: string) {
+    const progress = this.state.weekProgress[weekId];
+    return {
+      beforeComplete: progress?.beforeComplete ?? false,
+      afterComplete: progress?.afterComplete ?? false,
+      visitedGames: progress?.visitedGames ?? [],
+      completedGames: progress?.completedGames ?? [],
+    };
+  }
+
+  markWeekFlashcardsComplete(weekId: string, phase: 'before' | 'after') {
+    const progress = this.getWeekProgress(weekId);
+    this.state.weekProgress[weekId] = {
+      ...progress,
+      [phase === 'before' ? 'beforeComplete' : 'afterComplete']: true,
+    };
+    this.save();
+  }
+
+  markWeekGameVisited(weekId: string, gameId: string) {
+    const progress = this.getWeekProgress(weekId);
+    if (progress.visitedGames.includes(gameId)) return;
+    this.state.weekProgress[weekId] = {
+      ...progress,
+      visitedGames: [...progress.visitedGames, gameId],
+    };
+    this.save();
+  }
+
+  markWeekGameComplete(weekId: string, gameId: string) {
+    const progress = this.getWeekProgress(weekId);
+    if (progress.completedGames.includes(gameId)) return;
+    this.state.weekProgress[weekId] = {
+      ...progress,
+      completedGames: [...progress.completedGames, gameId],
+    };
+    this.save();
+  }
+
+  getFlashcardRun(weekId: string, phase: 'before' | 'after') {
+    return this.state.flashcardRuns[`${weekId}:${phase}`] ?? { ratedCards: {} };
+  }
+
+  rateFlashcard(weekId: string, phase: 'before' | 'after', cardId: string, knewIt: boolean) {
+    const key = `${weekId}:${phase}`;
+    const run = this.getFlashcardRun(weekId, phase);
+    this.state.flashcardRuns[key] = {
+      ...run,
+      ratedCards: { ...run.ratedCards, [cardId]: knewIt },
     };
     this.save();
   }

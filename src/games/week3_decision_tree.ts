@@ -244,7 +244,7 @@ export function renderWeek3DecisionTree(container: HTMLElement) {
               
               <!-- Parent Root Node -->
               <div style="display:flex; justify-content:center; margin-bottom: 12px;">
-                <div style="background: rgba(20, 30, 50, 0.9); border: 2px solid var(--accent-cyan); border-radius: 12px; padding: 12px 24px; text-align: center; min-width: 260px;">
+                <div class="decision-tree-node" style="background: rgba(20, 30, 50, 0.9); border: 2px solid var(--accent-cyan); border-radius: 12px; padding: 12px 24px; text-align: center; min-width: 260px;">
                   <strong style="color: #fff; font-size: 14px;">Root: Is Sensor Reading X ≤ ${threshold}?</strong>
                   <div style="font-family:'Fira Code'; font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
                     All 5 Sensors (2 Norm, 3 Faulty) • H = ${parentEntropy.toFixed(3)} • Gini = ${parentGini.toFixed(3)}
@@ -257,7 +257,7 @@ export function renderWeek3DecisionTree(container: HTMLElement) {
                 <!-- Left Branch -->
                 <div style="flex: 1; display:flex; flex-direction:column; align-items:center;">
                   <div style="font-family:'Fira Code'; font-size:12px; color:var(--accent-green); margin-bottom:6px;">YES (X ≤ ${threshold})</div>
-                  <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid ${s.leftH === 0 ? 'var(--accent-green)' : 'var(--accent-amber)'}; border-radius: 12px; padding: 14px; width: 85%; text-align: center;">
+                  <div class="decision-tree-node" style="background: rgba(15, 23, 42, 0.85); border: 1px solid ${s.leftH === 0 ? 'var(--accent-green)' : 'var(--accent-amber)'}; border-radius: 12px; padding: 14px; width: 85%; text-align: center;">
                     <div style="font-size: 14px; font-weight: 700; color: #fff;">Left Leaf (${s.left.length} Samples)</div>
                     <div style="font-size: 12px; color: var(--text-secondary); margin: 6px 0;">
                       ${s.leftNorm} Normal, ${s.leftFault} Faulty
@@ -271,7 +271,7 @@ export function renderWeek3DecisionTree(container: HTMLElement) {
                 <!-- Right Branch -->
                 <div style="flex: 1; display:flex; flex-direction:column; align-items:center;">
                   <div style="font-family:'Fira Code'; font-size:12px; color:var(--accent-red); margin-bottom:6px;">NO (X > ${threshold})</div>
-                  <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid ${s.rightH === 0 ? 'var(--accent-green)' : 'var(--accent-amber)'}; border-radius: 12px; padding: 14px; width: 85%; text-align: center;">
+                  <div class="decision-tree-node" style="background: rgba(15, 23, 42, 0.85); border: 1px solid ${s.rightH === 0 ? 'var(--accent-green)' : 'var(--accent-amber)'}; border-radius: 12px; padding: 14px; width: 85%; text-align: center;">
                     <div style="font-size: 14px; font-weight: 700; color: #fff;">Right Leaf (${s.right.length} Samples)</div>
                     <div style="font-size: 12px; color: var(--text-secondary); margin: 6px 0;">
                       ${s.rightNorm} Normal, ${s.rightFault} Faulty

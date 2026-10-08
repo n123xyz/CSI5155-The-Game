@@ -103,7 +103,7 @@ export function renderWeek4ConfusionDefense(container: HTMLElement) {
               <div style="color: var(--text-muted); font-weight: bold; display: flex; align-items: center; justify-content: flex-end;">Actual Neg</div>
               <div style="background: rgba(255, 170, 0, 0.15); border: 1px solid var(--accent-amber); padding: 14px; border-radius: 8px;">
                 <div style="font-size: 11px; color: var(--text-muted);">FALSE POS (FP)</div>
-                <strong style="font-size: 20px; color: #fef08a;">${m.fp}</strong>
+                <strong class="confusion-fp-value" style="font-size: 20px; color: #fef08a;">${m.fp}</strong>
               </div>
               <div style="background: rgba(0, 240, 255, 0.15); border: 1px solid var(--accent-cyan); padding: 14px; border-radius: 8px;">
                 <div style="font-size: 11px; color: var(--text-muted);">TRUE NEG (TN)</div>

@@ -1,5 +1,6 @@
 import { gameManager } from './state';
 import { sound } from './audio/sound';
+import { renderWeekFlashcards } from './flashcards';
 
 // Week 1 Games
 import { renderWeek1ParadigmSorter } from './games/week1_paradigm_sorter';
@@ -128,6 +129,9 @@ let currentSubGame: Record<string, string> = {
   week4: 'confusion',
   week5: 'cluster'
 };
+
+const BEFORE_FLASHCARDS = 'flashcards-before';
+const AFTER_FLASHCARDS = 'flashcards-after';
 
 function updateHUD() {
   const s = gameManager.getState();
@@ -266,28 +270,93 @@ function renderCurrentView() {
     }
   } else if (NAV_CONFIG[currentTab]) {
     const weekConfig = NAV_CONFIG[currentTab];
+    if (!weekConfig) return;
+    const weekId = currentTab;
+    const firstGame = weekConfig.games[0];
+    if (!firstGame) return;
+    let selectedGame = currentSubGame[weekId] ?? firstGame.id;
+    let weekProgress = gameManager.getWeekProgress(weekId);
+
+    if (!weekProgress.beforeComplete) {
+      selectedGame = BEFORE_FLASHCARDS;
+    } else if (selectedGame === BEFORE_FLASHCARDS) {
+      selectedGame = firstGame.id;
+    }
+    currentSubGame[weekId] = selectedGame;
+
+    let allContentComplete = weekConfig.games.every(game => weekProgress.completedGames.includes(game.id));
+    if (selectedGame === AFTER_FLASHCARDS && !allContentComplete) {
+      selectedGame = weekConfig.games.find(game => !weekProgress.completedGames.includes(game.id))?.id
+        ?? firstGame.id;
+      currentSubGame[weekId] = selectedGame;
+    }
+
+    if (weekConfig.games.some(game => game.id === selectedGame)) {
+      gameManager.markWeekGameVisited(weekId, selectedGame);
+      weekProgress = gameManager.getWeekProgress(weekId);
+    }
+
     subNavBar.style.display = 'flex';
 
     // Populate sub nav bar
-    subNavBar.innerHTML = weekConfig.games.map(g => `
-      <button class="sub-nav-btn ${currentSubGame[currentTab] === g.id ? 'active' : ''}" data-gameid="${g.id}">
-        ${g.label}
+    const navItems = [
+      { id: BEFORE_FLASHCARDS, label: `Before-week flashcards (${weekProgress.beforeComplete ? 'complete' : 'start'})`, disabled: weekProgress.beforeComplete },
+      ...weekConfig.games.map(game => ({ ...game, disabled: !weekProgress.beforeComplete })),
+      { id: AFTER_FLASHCARDS, label: 'After-week flashcards', disabled: !allContentComplete },
+    ];
+    subNavBar.innerHTML = navItems.map(item => `
+      <button class="sub-nav-btn ${selectedGame === item.id ? 'active' : ''}" data-gameid="${item.id}" ${item.disabled ? 'disabled' : ''}>
+        ${item.label}
       </button>
     `).join('');
 
     subNavBar.querySelectorAll('.sub-nav-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         sound.playClick();
-        currentSubGame[currentTab] = (btn as HTMLElement).dataset.gameid!;
+        currentSubGame[weekId] = (btn as HTMLElement).dataset.gameid!;
         renderCurrentView();
       });
     });
 
     // Render active game
-    const activeGame = weekConfig.games.find(g => g.id === currentSubGame[currentTab]) || weekConfig.games[0];
-    if (activeGame) {
-      mainContent.innerHTML = '';
+    mainContent.innerHTML = '';
+    delete mainContent.dataset.flashcardRenderToken;
+    if (selectedGame === BEFORE_FLASHCARDS) {
+      renderWeekFlashcards(mainContent, weekId, 'before', () => {
+        currentSubGame[weekId] = firstGame.id;
+        renderCurrentView();
+      });
+    } else if (selectedGame === AFTER_FLASHCARDS) {
+      renderWeekFlashcards(mainContent, weekId, 'after');
+    } else {
+      const activeGame = weekConfig.games.find(g => g.id === selectedGame) || firstGame;
       activeGame.render(mainContent);
+
+      const isComplete = weekProgress.completedGames.includes(activeGame.id);
+      const lessonFooter = document.createElement('section');
+      lessonFooter.className = 'week-lesson-completion';
+      const completionMessage = document.createElement('p');
+      completionMessage.textContent = isComplete
+        ? 'Subtask complete. Your progress is saved.'
+        : 'Finish this subtask, then mark it complete to unlock the after-week flashcards.';
+      const completionButton = document.createElement('button');
+      completionButton.type = 'button';
+      completionButton.dataset.completeWeekGame = '';
+      completionButton.className = 'btn btn-secondary btn-sm';
+      completionButton.textContent = isComplete ? 'Subtask complete ✓' : 'Mark subtask complete';
+      completionButton.disabled = isComplete;
+      completionButton.addEventListener('click', () => {
+        gameManager.markWeekGameComplete(weekId, activeGame.id);
+        completionButton.disabled = true;
+        completionButton.textContent = 'Subtask complete ✓';
+        completionMessage.textContent = 'Subtask complete. Your progress is saved.';
+        const progress = gameManager.getWeekProgress(weekId);
+        const allComplete = weekConfig.games.every(game => progress.completedGames.includes(game.id));
+        const afterFlashcards = subNavBar.querySelector<HTMLButtonElement>(`[data-gameid="${AFTER_FLASHCARDS}"]`);
+        if (afterFlashcards) afterFlashcards.disabled = !allComplete;
+      });
+      lessonFooter.append(completionMessage, completionButton);
+      mainContent.appendChild(lessonFooter);
     }
   }
 }
@@ -308,7 +377,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (hash.includes(':')) {
         const [t, g] = hash.split(':');
         if (t) currentTab = t;
-        if (g) currentSubGame[t] = g;
+        if (t && g) currentSubGame[t] = g;
       } else {
         currentTab = hash;
       }
@@ -335,6 +404,39 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-sound-toggle')?.addEventListener('click', (e) => {
     sound.enabled = !sound.enabled;
     (e.target as HTMLElement).textContent = sound.enabled ? '🔊' : '🔇';
+    sound.playClick();
+  });
+
+  // Theme toggle
+  const themeToggle = document.getElementById('btn-theme-toggle');
+  let savedTheme: string | null = null;
+  try {
+    savedTheme = localStorage.getItem('csi5155_ml_game_theme');
+  } catch (e) {
+    console.warn('Theme preference could not be loaded:', e);
+  }
+  if (savedTheme === 'light') {
+    document.body.dataset.theme = 'light';
+  }
+  const updateThemeToggle = () => {
+    const isLight = document.body.dataset.theme === 'light';
+    const label = isLight ? 'Switch to dark mode' : 'Switch to light mode';
+    if (themeToggle) {
+      themeToggle.textContent = isLight ? '🌙' : '☀️';
+      themeToggle.title = label;
+      themeToggle.setAttribute('aria-label', label);
+    }
+  };
+  updateThemeToggle();
+  themeToggle?.addEventListener('click', () => {
+    const isLight = document.body.dataset.theme !== 'light';
+    document.body.dataset.theme = isLight ? 'light' : 'dark';
+    try {
+      localStorage.setItem('csi5155_ml_game_theme', isLight ? 'light' : 'dark');
+    } catch (e) {
+      console.warn('Theme preference could not be saved:', e);
+    }
+    updateThemeToggle();
     sound.playClick();
   });
 
