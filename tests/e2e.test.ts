@@ -207,6 +207,25 @@ async function runTest() {
     }
     await bayesPage.close();
 
+    const kernelPage = await browser.newPage();
+    await kernelPage.addInitScript(() => {
+      localStorage.setItem('csi5155_ml_game_state_v1', JSON.stringify({
+        weekProgress: {
+          week2: { beforeComplete: true, afterComplete: false, visitedGames: [], completedGames: [] },
+        },
+      }));
+    });
+    await kernelPage.goto(`http://localhost:${PORT}/#week2`, { waitUntil: 'networkidle' });
+    await kernelPage.click('.sub-nav-btn[data-gameid="svm"]');
+    await kernelPage.locator('.math-explainer summary').click();
+    const kernelGuide = await kernelPage.locator('.math-explainer').textContent();
+    for (const kernelName of ['Linear Kernel', 'Polynomial Kernel', 'RBF (Gaussian) Kernel', 'Sigmoid Kernel', 'cross-validation']) {
+      if (!kernelGuide?.includes(kernelName)) {
+        throw new Error(`SVM kernel guide is missing ${kernelName}.`);
+      }
+    }
+    await kernelPage.close();
+
     const diagnosticsPage = await browser.newPage();
     await diagnosticsPage.addInitScript(() => {
       if (localStorage.getItem('csi5155_ml_game_state_v1')) return;

@@ -31,6 +31,7 @@ An interactive study game for learning and reviewing machine-learning concepts f
 
 - **Five weeks of course material:** foundations and learning paradigms; regression, optimization, and SVMs; decision trees, k-NN, and data preparation; evaluation, pipelines, feature selection, and PCA; clustering, semi-supervised learning, and ensembles.
 - **Interactive visual lessons:** manipulate thresholds, parameters, points, centroids, and other controls to see how a method behaves.
+- **SVM kernel guide:** compare linear, polynomial, RBF/Gaussian, and sigmoid kernels, their formulas, and when each is useful.
 - **Visual and 3D simulations:** explore concepts such as gradient descent, clustering, vector geometry, and decision boundaries.
 - **Before-and-after weekly flashcards:** complete a week’s flashcard deck before its lessons, then repeat it whenever you’re ready. The 64 weekly cards come from `public/flashcards.md`; progress and card ratings are saved in the browser.
 - **Math typesetting:** flashcard equations are rendered with KaTeX, including inline and display math.

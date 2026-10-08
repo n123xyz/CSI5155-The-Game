@@ -56,10 +56,31 @@ export function renderWeek2SvmKernel(container: HTMLElement) {
           <p><strong>Kernel Function Role:</strong> A kernel K(x, x') = ⟨ϕ(x), ϕ(x')⟩ acts as an implicit similarity measure that maps inputs into a higher-dimensional feature space where non-linear patterns become linearly separable!</p>
           <p><strong>Why particularly useful:</strong> Thanks to the <em>"Kernel Trick"</em>, we can compute inner products in infinite- or high-dimensional spaces without ever explicitly computing or storing high-dimensional transformation coordinates ϕ(x), preventing computational blowup.</p>
           <div class="formula-block">
-            Quadratic Optimization: min_{w, b} ½||w||² + C ∑ max(0, 1 - yᵢ(wᵀxᵢ + b))<br>
-            RBF Kernel: K(x, x') = exp(-γ ||x - x'||²)<br>
-            Polynomial Kernel: K(x, x') = (xᵀx' + c)ᵈ
+            Linear Kernel: K(x, x') = xᵀx'<br>
+            Polynomial Kernel: K(x, x') = (γ xᵀx' + r)ᵈ<br>
+            RBF (Gaussian) Kernel: K(x, x') = exp(-γ ||x - x'||²)<br>
+            Sigmoid Kernel: K(x, x') = tanh(γ xᵀx' + r)
           </div>
+          <h4 style="margin: 18px 0 10px; color: var(--text-primary);">Choosing a kernel</h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px;">
+            <div style="padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+              <strong style="color: var(--accent-cyan);">Linear</strong>
+              <p style="margin: 6px 0 0; color: var(--text-secondary); font-size: 12px;">A straight decision boundary; a strong, efficient baseline for linearly separable or very high-dimensional data such as text.</p>
+            </div>
+            <div style="padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+              <strong style="color: var(--accent-purple);">Polynomial</strong>
+              <p style="margin: 6px 0 0; color: var(--text-secondary); font-size: 12px;">Models interactions up to degree d. Useful when feature combinations create curved boundaries; high degrees can overfit.</p>
+            </div>
+            <div style="padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+              <strong style="color: var(--accent-green);">RBF / Gaussian</strong>
+              <p style="margin: 6px 0 0; color: var(--text-secondary); font-size: 12px;">A flexible, localized similarity that creates non-linear boundaries. Often a good default after scaling features; tune C and γ with validation.</p>
+            </div>
+            <div style="padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+              <strong style="color: var(--accent-amber);">Sigmoid</strong>
+              <p style="margin: 6px 0 0; color: var(--text-secondary); font-size: 12px;">A tanh-shaped similarity inspired by neural activations. Can model non-linear patterns, but is sensitive to parameter choices and is not valid for every γ and r combination.</p>
+            </div>
+          </div>
+          <p style="margin-top: 12px; color: var(--text-secondary); font-size: 12px;"><strong>Practical tip:</strong> Scale features before fitting an SVM, compare a linear baseline with RBF, and select kernel parameters using cross-validation rather than the test set.</p>
         </div>
       </details>
     </div>
