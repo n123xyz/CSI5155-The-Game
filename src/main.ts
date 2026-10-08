@@ -1,6 +1,7 @@
 import { gameManager } from './state';
 import { sound } from './audio/sound';
 import { renderWeekFlashcards } from './flashcards';
+import { renderMath } from './math';
 
 // Week 1 Games
 import { renderWeek1ParadigmSorter } from './games/week1_paradigm_sorter';
@@ -370,6 +371,21 @@ function switchTab(tabName: string) {
 // Initial bootstrap
 window.addEventListener('DOMContentLoaded', async () => {
   await loadModules();
+  const mainContent = document.getElementById('main-content')!;
+  const mathObserver = new MutationObserver(mutations => {
+    for (const mutation of mutations) {
+      const target = mutation.target instanceof HTMLElement ? mutation.target : mutation.target.parentElement;
+      if (!target) continue;
+      const addedElements = [...mutation.addedNodes].filter((node): node is HTMLElement => node instanceof HTMLElement);
+      if (addedElements.length) {
+        addedElements.forEach(node => renderMath(node));
+      } else if (target.matches('.formula-block, p, li, label')) {
+        renderMath(target);
+      }
+    }
+  });
+  mathObserver.observe(mainContent, { childList: true, subtree: true });
+  renderMath(mainContent);
 
   function parseHash() {
     if (window.location.hash) {

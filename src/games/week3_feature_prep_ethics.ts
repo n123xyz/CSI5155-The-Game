@@ -185,11 +185,11 @@ export function renderWeek3FeaturePrepEthics(container: HTMLElement) {
           <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
             <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 10px;">🛡️ Data Contamination Rule & Datasheets for Datasets</h3>
             <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 14px;">
-              What is the strict rule regarding feature scaling parameters (\(\mu, \sigma, \min, \max\)) when evaluating models?
+              What is the strict rule regarding feature scaling parameters (\\(\\mu, \\sigma, \\min, \\max\\)) when evaluating models?
             </p>
             <div class="quiz-options">
               <button class="quiz-option-btn q-opt-prep" data-val="correct">
-                <strong>Strict Train-Only Estimation:</strong> Scaling statistics (\(\mu, \sigma\)) must be computed strictly on the Training set, and applied forward to Test data without recalculating on the Test set to prevent <strong>preprocessing data leakage</strong>.
+                <strong>Strict Train-Only Estimation:</strong> Scaling statistics (\\(\\mu, \\sigma\\)) must be computed strictly on the Training set, and applied forward to Test data without recalculating on the Test set to prevent <strong>preprocessing data leakage</strong>.
               </button>
               <button class="quiz-option-btn q-opt-prep" data-val="wrong">
                 Scaling statistics should always be recalculated on the combined dataset to maximize accuracy.

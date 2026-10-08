@@ -41,7 +41,7 @@ export function renderWeek3MinkowskiMetricSpace(container: HTMLElement) {
           <div style="animation: fadeIn 0.3s ease;">
             <div class="controls-panel" style="margin-bottom: 16px;">
               <div class="control-item" style="flex: 1;">
-                <label>Minkowski Order \(p\): <span id="p-val" style="color: var(--accent-cyan); font-weight: bold;">${pOrder.toFixed(1)}</span></label>
+                <label>Minkowski Order \\(p\\): <span id="p-val" style="color: var(--accent-cyan); font-weight: bold;">${pOrder.toFixed(1)}</span></label>
                 <input type="range" id="p-slider" min="0.5" max="6.0" step="0.5" value="${pOrder}" style="width: 100%;">
               </div>
               <div class="control-item">
@@ -58,7 +58,7 @@ export function renderWeek3MinkowskiMetricSpace(container: HTMLElement) {
               <div class="game-viewport" style="height: 300px;">
                 <canvas id="minkowski-canvas" width="600" height="300" style="width: 100%; height: 100%;"></canvas>
                 <div class="viewport-overlay">
-                  Unit Circle Contour: \(\{|x_1|^p + |x_2|^p\}^{1/p} = 1\)
+                  Unit Circle Contour: \\(\\{|x_1|^p + |x_2|^p\\}^{1/p} = 1\\)
                 </div>
               </div>
 
@@ -83,7 +83,7 @@ export function renderWeek3MinkowskiMetricSpace(container: HTMLElement) {
           <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
             <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 12px;">🏛️ The 3 Formal Metric Axioms (Week 3)</h3>
             <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
-              For any valid distance metric function \(Dis(x, y)\) on a metric space:
+              For any valid distance metric function \\(Dis(x, y)\\) on a metric space:
             </p>
 
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px;">
@@ -107,7 +107,7 @@ export function renderWeek3MinkowskiMetricSpace(container: HTMLElement) {
             </div>
 
             <div style="background: rgba(255, 170, 0, 0.08); border-left: 3px solid var(--accent-amber); padding: 10px 14px; border-radius: 4px; font-size: 12px; color: #fde047;">
-              💡 <strong>Pseudo-Metric:</strong> Relaxes strict positivity, permitting \(Dis(x, y) = 0\) for distinct points \(x \neq y\).
+              💡 <strong>Pseudo-Metric:</strong> Relaxes strict positivity, permitting \\(Dis(x, y) = 0\\) for distinct points \\(x \\neq y\\).
             </div>
           </div>
         ` : `
@@ -115,11 +115,11 @@ export function renderWeek3MinkowskiMetricSpace(container: HTMLElement) {
           <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
             <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 10px;">📐 High-Dimensional Text: Cosine vs Euclidean</h3>
             <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 14px;">
-              Why is <strong>Cosine Distance</strong> (\(1 - \cos\theta\)) preferred over Euclidean distance when comparing text embeddings of documents with very different lengths?
+              Why is <strong>Cosine Distance</strong> (\\(1 - \\cos\\theta\\)) preferred over Euclidean distance when comparing text embeddings of documents with very different lengths?
             </p>
             <div class="quiz-options">
               <button class="quiz-option-btn q-opt-mink" data-val="correct">
-                <strong>Length Invariance:</strong> Cosine distance measures vector angular orientation \(\theta\) regardless of magnitude/word-count, whereas Euclidean distance is inflated purely by document length differences!
+                <strong>Length Invariance:</strong> Cosine distance measures vector angular orientation \\(\\theta\\) regardless of magnitude/word-count, whereas Euclidean distance is inflated purely by document length differences!
               </button>
               <button class="quiz-option-btn q-opt-mink" data-val="wrong">
                 Because Euclidean distance cannot be calculated in spaces with more than 3 dimensions.
@@ -134,10 +134,10 @@ export function renderWeek3MinkowskiMetricSpace(container: HTMLElement) {
           <div class="explainer-content">
             <p><strong>Minkowski Norms and Voronoi Partitions:</strong></p>
             <ul>
-              <li>\(p = 2\): Standard \(L_2\) Euclidean norm: \(\sqrt{\sum (x_i - y_i)^2}\)</li>
-              <li>\(p = 1\): \(L_1\) Manhattan norm: \(\sum |x_i - y_i|\)</li>
-              <li>\(p = 0\): Hamming distance: counts number of coordinate mismatches \(\sum \mathbb{I}[x_i \neq y_i]\)</li>
-              <li><strong>Cosine Similarity:</strong> \(\frac{A \cdot B}{\|A\|\|B\|} = \cos(\theta)\)</li>
+              <li>\\(p = 2\\): Standard \\(L_2\\) Euclidean norm: \\(\\sqrt{\\sum (x_i - y_i)^2}\\)</li>
+              <li>\\(p = 1\\): \\(L_1\\) Manhattan norm: \\(\\sum |x_i - y_i|\\)</li>
+              <li>\\(p = 0\\): Hamming distance: counts number of coordinate mismatches \\(\\sum \\mathbb{I}[x_i \\neq y_i]\\)</li>
+              <li><strong>Cosine Similarity:</strong> \\(\\frac{A \\cdot B}{\\|A\\|\\|B\\|} = \\cos(\\theta)\\)</li>
             </ul>
           </div>
         </details>

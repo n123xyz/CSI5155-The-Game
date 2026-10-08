@@ -28617,7 +28617,7 @@ function renderWeek5EnsembleClash(container) {
                 <p style="font-size:13px; line-height:1.6; color:#fff;">
                   <strong>Official Exam Solution:</strong> <strong>BOOSTING</strong> is the preferred approach.
                   <br>• <strong>Boosting Mechanism:</strong> Base models are trained <em>sequentially</em>. Each successive weak learner fits the residual errors (in Gradient Boosting) or re-weighted misclassifications (in AdaBoost) of the previous ensemble. This sequential correction directly converts a high-bias weak model into an arbitrarily complex low-bias ensemble.
-                  <br>• <strong>Bagging Mechanism:</strong> Bagging trains independent models in <em>parallel</em> on bootstrap samples and averages predictions. The mathematical expectation of an average is the expectation of the base learner: $\\mathbb{E}[\\bar{f}] = \\mathbb{E}[f_{base}]$. Thus, <strong>Bagging does NOT reduce bias</strong>; its sole mechanism is reducing variance ($	ext{Var} \\approx \\rho \\sigma^2 + \\frac{1-\\rho}{B}\\sigma^2$) for deep high-variance trees!
+                  <br>• <strong>Bagging Mechanism:</strong> Bagging trains independent models in <em>parallel</em> on bootstrap samples and averages predictions. The mathematical expectation of an average is the expectation of the base learner: $\\mathbb{E}[\\bar{f}] = \\mathbb{E}[f_{base}]$. Thus, <strong>Bagging does NOT reduce bias</strong>; its sole mechanism is reducing variance ($\\text{Var} \\approx \\rho \\sigma^2 + \\frac{1-\\rho}{B}\\sigma^2$) for deep high-variance trees!
                 </p>
               </div>
             ` : ""}
@@ -28804,9 +28804,9 @@ function renderWeek5EnsembleClash(container) {
         <details class="math-explainer">
         <summary>\uD83D\uDCA1 Week 5 Slide Insights: Bagging vs Boosting & Gradient Residual Optimization (Click to expand)</summary>
         <div class="explainer-content">
-          <p><strong>Bagging (Variance Reduction):</strong> Trains $B$ independent learners in parallel on bootstrap samples. Variance reduces as $	ext{Var} = \rho sigma^2 + \frac{1-\rho}{B}sigma^2$. Bias is untouched!</p>
-          <p><strong>AdaBoost (Sequential Re-weighting):</strong> Focuses on hard samples by multiplying misclassified sample weights by $e^{alpha_m}$ and correctly classified by $e^{-alpha_m}$ where $alpha_m = \frac{1}{2}lnleft(\frac{1 - epsilon_m}{epsilon_m}\right)$.</p>
-          <p><strong>Gradient Boosting (Pseudo-Residuals):</strong> Minimizes loss $mathcal{L}(y, f(x))$ by training each new regression tree directly on the negative gradient (residuals): $r_{im} = -left[\frac{partial mathcal{L}(y_i, f(x_i))}{partial f(x_i)}\right]$.</p>
+          <p><strong>Bagging (Variance Reduction):</strong> Trains $B$ independent learners in parallel on bootstrap samples. Variance reduces as $\\text{Var} = \\rho \\sigma^2 + \\frac{1-\\rho}{B}\\sigma^2$. Bias is untouched!</p>
+          <p><strong>AdaBoost (Sequential Re-weighting):</strong> Focuses on hard samples by multiplying misclassified sample weights by $e^{\\alpha_m}$ and correctly classified by $e^{-\\alpha_m}$ where $\\alpha_m = \\frac{1}{2}\\ln\\left(\\frac{1 - \\epsilon_m}{\\epsilon_m}\\right)$.</p>
+          <p><strong>Gradient Boosting (Pseudo-Residuals):</strong> Minimizes loss $\\mathcal{L}(y, f(x))$ by training each new regression tree directly on the negative gradient (residuals): $r_{im} = -\\left[\\frac{\\partial \\mathcal{L}(y_i, f(x_i))}{\\partial f(x_i)}\\right]$.</p>
           <div class="formula-block">
             AdaBoost Update: w_{i}^{(m+1)} = (w_i^{(m)} / Z_m) · exp(-α_m y_i h_m(x_i))<br>
             Gradient Boosting: f_m(x) = f_{m-1}(x) + α · γ_m(x), where r_n = y_n - f_{m-1}(x_n)
@@ -44525,6 +44525,272 @@ function renderWeekFlashcards(container, week, phase, onBeforeComplete) {
   });
 }
 
+// node_modules/katex/dist/contrib/auto-render.mjs
+var findEndOfMath = function findEndOfMath(delimiter, text, startIndex) {
+  var index = startIndex;
+  var braceLevel = 0;
+  var delimLength = delimiter.length;
+  while (index < text.length) {
+    var character = text[index];
+    if (braceLevel <= 0 && text.slice(index, index + delimLength) === delimiter) {
+      return index;
+    } else if (character === "\\") {
+      index++;
+    } else if (character === "{") {
+      braceLevel++;
+    } else if (character === "}") {
+      braceLevel--;
+    }
+    index++;
+  }
+  return -1;
+};
+var escapeRegex = function escapeRegex(string) {
+  return string.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+};
+var amsRegex = /^\\begin{/;
+var splitAtDelimiters = function splitAtDelimiters(text, delimiters) {
+  var index;
+  var data = [];
+  var regexLeft = new RegExp("(" + delimiters.map((x) => escapeRegex(x.left)).join("|") + ")");
+  while (true) {
+    index = text.search(regexLeft);
+    if (index === -1) {
+      break;
+    }
+    if (index > 0) {
+      data.push({
+        type: "text",
+        data: text.slice(0, index)
+      });
+      text = text.slice(index);
+    }
+    var i = delimiters.findIndex((delim) => text.startsWith(delim.left));
+    index = findEndOfMath(delimiters[i].right, text, delimiters[i].left.length);
+    if (index === -1) {
+      break;
+    }
+    var rawData = text.slice(0, index + delimiters[i].right.length);
+    var math = amsRegex.test(rawData) ? rawData : text.slice(delimiters[i].left.length, index);
+    data.push({
+      type: "math",
+      data: math,
+      rawData,
+      display: delimiters[i].display
+    });
+    text = text.slice(index + delimiters[i].right.length);
+  }
+  if (text !== "") {
+    data.push({
+      type: "text",
+      data: text
+    });
+  }
+  return data;
+};
+var renderMathInText = function renderMathInText(text, optionsCopy) {
+  var data = splitAtDelimiters(text, optionsCopy.delimiters);
+  if (data.length === 1 && data[0].type === "text") {
+    return null;
+  }
+  var fragment = document.createDocumentFragment();
+  for (var i = 0;i < data.length; i++) {
+    if (data[i].type === "text") {
+      fragment.appendChild(document.createTextNode(data[i].data));
+    } else {
+      var span = document.createElement("span");
+      var math = data[i].data;
+      optionsCopy.displayMode = data[i].display;
+      try {
+        if (optionsCopy.preProcess) {
+          math = optionsCopy.preProcess(math);
+        }
+        katex.render(math, span, optionsCopy);
+      } catch (e) {
+        if (!(e instanceof katex.ParseError)) {
+          throw e;
+        }
+        optionsCopy.errorCallback("KaTeX auto-render: Failed to parse `" + data[i].data + "` with ", e);
+        fragment.appendChild(document.createTextNode(data[i].rawData));
+        continue;
+      }
+      fragment.appendChild(span);
+    }
+  }
+  return fragment;
+};
+var _renderElem = function renderElem(elem, optionsCopy) {
+  var _loop = function _loop(_i) {
+    var childNode = elem.childNodes[_i];
+    if (childNode.nodeType === 3) {
+      var _childNode$textConten;
+      var textContentConcat = (_childNode$textConten = childNode.textContent) != null ? _childNode$textConten : "";
+      var sibling = childNode.nextSibling;
+      var nSiblings = 0;
+      while (sibling && sibling.nodeType === Node.TEXT_NODE) {
+        var _sibling$textContent;
+        textContentConcat += (_sibling$textContent = sibling.textContent) != null ? _sibling$textContent : "";
+        sibling = sibling.nextSibling;
+        nSiblings++;
+      }
+      var frag = renderMathInText(textContentConcat, optionsCopy);
+      if (frag) {
+        for (var j = 0;j < nSiblings; j++) {
+          childNode.nextSibling.remove();
+        }
+        _i += frag.childNodes.length - 1;
+        elem.replaceChild(frag, childNode);
+      } else {
+        _i += nSiblings;
+      }
+    } else if (childNode.nodeType === 1) {
+      var className = " " + childNode.className + " ";
+      var shouldRender = !optionsCopy.ignoredTags.has(childNode.nodeName.toLowerCase()) && optionsCopy.ignoredClasses.every((x) => !className.includes(" " + x + " "));
+      if (shouldRender) {
+        _renderElem(childNode, optionsCopy);
+      }
+    }
+    i = _i;
+  };
+  for (var i = 0;i < elem.childNodes.length; i++) {
+    _loop(i);
+  }
+};
+var renderMathInElement = function renderMathInElement(elem, options) {
+  if (!elem) {
+    throw new Error("No element provided to render");
+  }
+  var optionsCopy = {};
+  Object.assign(optionsCopy, options);
+  optionsCopy.delimiters = optionsCopy.delimiters || [
+    {
+      left: "$$",
+      right: "$$",
+      display: true
+    },
+    {
+      left: "\\(",
+      right: "\\)",
+      display: false
+    },
+    {
+      left: "\\begin{equation}",
+      right: "\\end{equation}",
+      display: true
+    },
+    {
+      left: "\\begin{align}",
+      right: "\\end{align}",
+      display: true
+    },
+    {
+      left: "\\begin{alignat}",
+      right: "\\end{alignat}",
+      display: true
+    },
+    {
+      left: "\\begin{gather}",
+      right: "\\end{gather}",
+      display: true
+    },
+    {
+      left: "\\begin{CD}",
+      right: "\\end{CD}",
+      display: true
+    },
+    {
+      left: "\\[",
+      right: "\\]",
+      display: true
+    }
+  ];
+  optionsCopy.ignoredTags = new Set((options == null ? undefined : options.ignoredTags) || ["script", "noscript", "style", "textarea", "pre", "code", "option"]);
+  optionsCopy.ignoredClasses = optionsCopy.ignoredClasses || [];
+  optionsCopy.errorCallback = optionsCopy.errorCallback || console.error;
+  optionsCopy.macros = optionsCopy.macros || {};
+  _renderElem(elem, optionsCopy);
+};
+
+// src/math.ts
+var delimiters2 = [
+  { left: "$$", right: "$$", display: true },
+  { left: "\\[", right: "\\]", display: true },
+  { left: "\\(", right: "\\)", display: false },
+  { left: "$", right: "$", display: false }
+];
+function formulaLines(element) {
+  const source = element.innerHTML.replace(/<br\s*\/?>/gi, `
+`);
+  const text = document.createElement("div");
+  text.innerHTML = source;
+  return (text.textContent ?? "").split(`
+`).map((line) => line.trim()).filter(Boolean);
+}
+function asTex(line) {
+  const colon = line.indexOf(":");
+  if (colon > 0) {
+    const label = line.slice(0, colon).trim();
+    const expression = line.slice(colon + 1).trim();
+    if (expression) {
+      const subscriptLabel = label.match(/^([A-Za-z]+)([₀₁₂₃₄₅₆₇₈₉]+)$/u);
+      const texLabel = subscriptLabel ? `\\text{${subscriptLabel[1]}}_{${[...subscriptLabel[2]].map((digit) => "₀₁₂₃₄₅₆₇₈₉".indexOf(digit)).join("")}}` : `\\text{${label}}`;
+      return `${texLabel}:\\quad ${expression}`;
+    }
+  }
+  const namedEquation = line.match(/^([A-Za-z][A-Za-z0-9 /&-]*?)\s*=\s*(.+)$/);
+  if (namedEquation?.[1] && namedEquation[2]) {
+    return `\\text{${namedEquation[1].trim()}} = ${namedEquation[2]}`;
+  }
+  if (/^where\b/i.test(line)) {
+    return `\\text{where}\\quad ${line.replace(/^where\s*/i, "")}`;
+  }
+  return line;
+}
+function isEquation(line) {
+  return /[=≤≥≠∑√Σ∏∫πθμσ∈]|argmax|argmin|\\frac|[_^]/u.test(line);
+}
+function normalizeTex(line) {
+  return line.replace(/∑/g, "\\sum ").replace(/∏/g, "\\prod ").replace(/√\(((?:[^()]|\([^()]*\))*)\)/g, "\\sqrt{$1}").replace(/([A-Za-z0-9])²/g, "$1^{2}").replace(/[₀₁₂₃₄₅₆₇₈₉]+/gu, (digits) => `_{${[...digits].map((digit) => "₀₁₂₃₄₅₆₇₈₉".indexOf(digit)).join("")}}`).replace(/θ/g, "\\theta ").replace(/μ/g, "\\mu ").replace(/σ/g, "\\sigma ").replace(/·/g, "\\cdot ").replace(/≤/g, "\\le ").replace(/≥/g, "\\ge ").replace(/≠/g, "\\ne ").replace(/→/g, "\\to ").replace(/ϕ/g, "\\phi ").replace(/⌈/g, "\\lceil ").replace(/⌉/g, "\\rceil ").replace(/x̄/g, "\\bar{x}").replace(/ȳ/g, "\\bar{y}").replace(/f̂/g, "\\hat{f}");
+}
+function renderFormulaBlocks(root) {
+  const blocks = [];
+  if (root instanceof HTMLElement && root.matches(".formula-block"))
+    blocks.push(root);
+  blocks.push(...root.querySelectorAll(".formula-block"));
+  for (const block of blocks) {
+    if (block.querySelector(".katex") || /\\\[|\\\(|\$\$?/.test(block.textContent ?? ""))
+      continue;
+    const lines = formulaLines(block);
+    if (!lines.some(isEquation))
+      continue;
+    block.replaceChildren(...lines.map((line) => {
+      const rendered = document.createElement("div");
+      if (isEquation(line)) {
+        rendered.className = "formula-math-line";
+        rendered.innerHTML = katex.renderToString(normalizeTex(asTex(line)), {
+          displayMode: true,
+          throwOnError: false,
+          strict: "ignore"
+        });
+      } else {
+        rendered.className = "formula-text-line";
+        rendered.textContent = line;
+      }
+      return rendered;
+    }));
+  }
+}
+function renderMath(root) {
+  if (root.closest(".katex"))
+    return;
+  renderFormulaBlocks(root);
+  renderMathInElement(root, {
+    delimiters: delimiters2,
+    throwOnError: false,
+    strict: "ignore"
+  });
+}
+
 // src/games/week1_paradigm_sorter.ts
 init_state();
 init_sound();
@@ -45314,9 +45580,9 @@ function renderWeek1DatasaurusStats(container) {
           <div class="explainer-content">
             <p><strong>Datasaurus Dozen (Alberto Cairo, 2016):</strong> Created to demonstrate the importance of visualizing data rather than blindly relying on low-order summary statistics. An entire family of 12 distinct datasets share nearly identical:</p>
             <ul>
-              <li>Mean: (\bar{x} = 54.26, \bar{y} = 47.83)</li>
-              <li>Standard Deviation: (s_x = 16.76, s_y = 26.93)</li>
-              <li>Pearson correlation: (r = -0.06)</li>
+              <li>Mean: \\(\\bar{x} = 54.26, \\bar{y} = 47.83\\)</li>
+              <li>Standard Deviation: \\(s_x = 16.76, s_y = 26.93\\)</li>
+              <li>Pearson correlation: \\(r = -0.06\\)</li>
             </ul>
             <div class="formula-block">
               Pearson Correlation: r = ∑ (x_i - x̄)(y_i - ȳ) / [ √(∑(x_i - x̄)²) · √(∑(y_i - ȳ)²) ]
@@ -45932,7 +46198,7 @@ function renderWeek1TabularProbabilityBayes(container) {
             <div style="background: rgba(10, 16, 28, 0.9); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 20px;">
               <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 6px;">⚡ Naive Bayes Real-Time Predictor</h3>
               <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 18px;">
-                Conditional Independence Assumption: ( P(X_1, dots, X_d mid Y) = prod_{i=1}^d P(X_i mid Y) ). Configure unseen test query probe ( X^* ):
+                Conditional Independence Assumption: \\( P(X_1, \\dots, X_d \\mid Y) = \\prod_{i=1}^d P(X_i \\mid Y) \\). Configure unseen test query probe \\( X^* \\):
               </p>
 
               <!-- Probe selectors -->
@@ -46024,10 +46290,10 @@ function renderWeek1TabularProbabilityBayes(container) {
         <details class="math-explainer">
           <summary>\uD83D\uDCA1 Course Slide Takeaway: Contingency Tables & Bayes Rules (Click to expand)</summary>
           <div class="explainer-content">
-            <p><strong>Sum Rule:</strong> ( P(X = x) = sum_{y} P(X = x, Y = y) ) computes the marginal distribution by summing across all columns of a joint probability contingency matrix.</p>
-            <p><strong>Product Rule:</strong> ( P(X = x, Y = y) = P(X = x mid Y = y) cdot P(Y = y) ).</p>
-            <p><strong>Bayes Rule:</strong> ( P(Y = y mid X = x) = \frac{P(X = x mid Y = y) cdot P(Y = y)}{P(X = x)} ).</p>
-            <p><strong>Zero Frequency Problem & Laplace Smoothing:</strong> If an attribute value never appears with a class, ( P(X_i mid Y) = 0 ), wiping out the whole product! Additive Laplace smoothing resolves this: ( hat{P}(X_i = v mid Y = c) = \frac{	ext{Count} + 1}{	ext{Total} + |V|} ).</p>
+            <p><strong>Sum Rule:</strong> \\( P(X = x) = \\sum_{y} P(X = x, Y = y) \\) computes the marginal distribution by summing across all columns of a joint probability contingency matrix.</p>
+            <p><strong>Product Rule:</strong> \\( P(X = x, Y = y) = P(X = x \\mid Y = y) \\cdot P(Y = y) \\).</p>
+            <p><strong>Bayes Rule:</strong> \\( P(Y = y \\mid X = x) = \\frac{P(X = x \\mid Y = y) \\cdot P(Y = y)}{P(X = x)} \\).</p>
+            <p><strong>Zero Frequency Problem & Laplace Smoothing:</strong> If an attribute value never appears with a class, \\( P(X_i \\mid Y) = 0 \\), wiping out the whole product! Additive Laplace smoothing resolves this: \\( \\hat{P}(X_i = v \\mid Y = c) = \\frac{\\text{Count} + 1}{\\text{Total} + |V|} \\).</p>
           </div>
         </details>
       </div>
@@ -46468,7 +46734,7 @@ function renderWeek2BiasVarianceDartboard(container) {
               <div class="game-viewport" style="height: 320px;">
                 <canvas id="dart-canvas" width="600" height="320" style="width: 100%; height: 100%;"></canvas>
                 <div class="viewport-overlay">
-                  Bullseye Target = True Underlying Distribution (f^*(x))
+                  Bullseye Target = True Underlying Distribution \\(f^*(x)\\)
                 </div>
               </div>
 
@@ -46495,7 +46761,7 @@ function renderWeek2BiasVarianceDartboard(container) {
           <div style="animation: fadeIn 0.3s ease;">
             <div class="controls-panel" style="margin-bottom: 16px;">
               <div class="control-item" style="flex: 1;">
-                <label>Model Capacity / Polynomial Degree (M): <span id="cap-val" style="color: var(--accent-cyan); font-weight: bold;">${modelCapacity}</span></label>
+                <label>Model Capacity / Polynomial Degree \\(M\\): <span id="cap-val" style="color: var(--accent-cyan); font-weight: bold;">${modelCapacity}</span></label>
                 <input type="range" id="cap-slider" min="1" max="9" step="1" value="${modelCapacity}" style="width: 100%;">
               </div>
               <div class="control-item">
@@ -47609,11 +47875,11 @@ function renderWeek2MulticlassShowdown(container) {
           <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px;">
             <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 12px;">\uD83D\uDCC8 Classifier Complexity Scaling: OvA vs OvO</h3>
             <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 18px;">
-              Drag the class count slider (K) to observe how One-vs-One explodes quadratically compared to One-vs-All:
+              Drag the class count slider \\(K\\) to observe how One-vs-One explodes quadratically compared to One-vs-All:
             </p>
 
             <div class="control-item" style="margin-bottom: 24px;">
-              <label>Number of Target Classes ((K)): <strong style="color: var(--accent-cyan); font-size: 16px;">${classCountK}</strong></label>
+              <label>Number of Target Classes (\\(K\\)): <strong style="color: var(--accent-cyan); font-size: 16px;">${classCountK}</strong></label>
               <input type="range" id="k-slider" min="3" max="25" step="1" value="${classCountK}" style="width: 100%;">
             </div>
 
@@ -47623,7 +47889,7 @@ function renderWeek2MulticlassShowdown(container) {
                 <div style="font-size: 32px; font-weight: 900; color: var(--accent-cyan); margin: 8px 0; font-family: 'Fira Code', monospace;">
                   ${ovaClassifiers}
                 </div>
-                <div style="font-size: 12px; color: var(--text-secondary);">Linear Growth: (O(K))</div>
+                <div style="font-size: 12px; color: var(--text-secondary);">Linear Growth: \\(O(K)\\)</div>
               </div>
 
               <div style="background: rgba(255, 170, 0, 0.05); border: 1px solid rgba(255, 170, 0, 0.2); padding: 18px; border-radius: var(--radius-md); text-align: center;">
@@ -47631,7 +47897,7 @@ function renderWeek2MulticlassShowdown(container) {
                 <div style="font-size: 32px; font-weight: 900; color: var(--accent-amber); margin: 8px 0; font-family: 'Fira Code', monospace;">
                   ${ovoClassifiers}
                 </div>
-                <div style="font-size: 12px; color: var(--text-secondary);">Quadratic Explosion: (\frac{K(K-1)}{2} = O(K^2))</div>
+                <div style="font-size: 12px; color: var(--text-secondary);">Quadratic Explosion: \\(\\frac{K(K-1)}{2} = O(K^2)\\)</div>
               </div>
             </div>
           </div>
@@ -47640,11 +47906,11 @@ function renderWeek2MulticlassShowdown(container) {
           <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px;">
             <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 12px;">\uD83C\uDFAF Quick Mastery Check: ImageNet Scaling</h3>
             <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
-              If training a dataset with (K = 1000) visual categories (e.g., ImageNet), why is OvO strictly avoided in favor of Softmax or OvA?
+              If training a dataset with \\(K = 1000\\) visual categories (e.g., ImageNet), why is OvO strictly avoided in favor of Softmax or OvA?
             </p>
             <div class="quiz-options">
               <button class="quiz-option-btn q-opt-mc" data-val="correct">
-                <strong>Computational Intractability:</strong> OvO would require training (\frac{1000 	imes 999}{2} = 499,500) individual binary classifiers, requiring astronomical memory and evaluation time!
+                <strong>Computational Intractability:</strong> OvO would require training \\(\\frac{1000 \\times 999}{2} = 499,500\\) individual binary classifiers, requiring astronomical memory and evaluation time!
               </button>
               <button class="quiz-option-btn q-opt-mc" data-val="wrong">
                 Because OvO cannot compute majority votes when K is an even number.
@@ -47659,7 +47925,7 @@ function renderWeek2MulticlassShowdown(container) {
           <div class="explainer-content">
             <p><strong>Multi-Class Decision Rules:</strong></p>
             <ul>
-              <li><strong>Softmax Log-Loss:</strong> (L = -sum_{i=1}^K y_i ln hat{y}_i), where (hat{y}_i = \frac{e^{z_i}}{sum e^{z_j}}). Gradient with respect to logit (z_i) is simply ((hat{y}_i - y_i)).</li>
+              <li><strong>Softmax Log-Loss:</strong> \\(L = -\\sum_{i=1}^K y_i \\ln \\hat{y}_i\\), where \\(\\hat{y}_i = \\frac{e^{z_i}}{\\sum e^{z_j}}\\). Gradient with respect to logit \\(z_i\\) is simply \\((\\hat{y}_i - y_i)\\).</li>
               <li><strong>OvA Imbalance:</strong> In OvA, each binary classifier suffers from an artificial class imbalance ratio of (1 : (K-1)), often requiring cost-sensitive adjustment.</li>
             </ul>
           </div>
@@ -47984,7 +48250,7 @@ function renderWeek3DecisionTree(container) {
             <div style="background: rgba(10, 16, 28, 0.9); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 20px;">
               <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 6px;">\uD83D\uDCC8 Purity Measures Comparison: Binary Classification</h3>
               <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
-                As the probability ( p in [0, 1] ) of the positive class changes, observe how Entropy, Gini Impurity, and Misclassification Error behave:
+                As the probability \\( p \\in [0, 1] \\) of the positive class changes, observe how Entropy, Gini Impurity, and Misclassification Error behave:
               </p>
 
               <!-- Interactive Probability Slider -->
@@ -48173,8 +48439,8 @@ function renderWeek3DecisionTree(container) {
         <details class="math-explainer">
           <summary>\uD83D\uDCA1 Midterm Q14 Official Derivation & Step-by-Step Math (Click to expand)</summary>
           <div class="explainer-content">
-            <p><strong>Candidate 1 ((t_1 = 5)):</strong> Splits at (x=5). Left: ({x_1, x_2}) (2 Normal, 0 Faulty) → (H = 0). Right: ({x_3, x_4, x_5}) (0 Normal, 3 Faulty) → (H = 0). Weighted Entropy = 0. Therefore, (IG = 0.971 - 0 = 0.971) bits.</p>
-            <p><strong>Candidate 2 ((t_2 = 7)):</strong> Splits at (x=7). Left: ({x_1, x_2, x_3}) (2 Normal, 1 Faulty). Right: ({x_4, x_5}) (0 Normal, 2 Faulty) → (H = 0). Left entropy (H = -\frac{2}{3}log_2\frac{2}{3} - \frac{1}{3}log_2\frac{1}{3} approx 0.918). Weighted = (\frac{3}{5}(0.918) = 0.551) bits. (IG = 0.971 - 0.551 = 0.420) bits.</p>
+            <p><strong>Candidate 1 (\\(t_1 = 5\\)):</strong> Splits at \\(x=5\\). Left: \\(\\{x_1, x_2\\}\\) (2 Normal, 0 Faulty) → \\(H = 0\\). Right: \\(\\{x_3, x_4, x_5\\}\\) (0 Normal, 3 Faulty) → \\(H = 0\\). Weighted Entropy = 0. Therefore, \\(IG = 0.971 - 0 = 0.971\\) bits.</p>
+            <p><strong>Candidate 2 (\\(t_2 = 7\\)):</strong> Splits at \\(x=7\\). Left: \\(\\{x_1, x_2, x_3\\}\\) (2 Normal, 1 Faulty). Right: \\(\\{x_4, x_5\\}\\) (0 Normal, 2 Faulty) → \\(H = 0\\). Left entropy \\(H = -\\frac{2}{3}\\log_2\\frac{2}{3} - \\frac{1}{3}\\log_2\\frac{1}{3} \\approx 0.918\\). Weighted = \\(\\frac{3}{5}(0.918) = 0.551\\) bits. \\(IG = 0.971 - 0.551 = 0.420\\) bits.</p>
           </div>
         </details>
       </div>
@@ -48494,7 +48760,7 @@ function renderWeek3MinkowskiMetricSpace(container) {
           <div style="animation: fadeIn 0.3s ease;">
             <div class="controls-panel" style="margin-bottom: 16px;">
               <div class="control-item" style="flex: 1;">
-                <label>Minkowski Order (p): <span id="p-val" style="color: var(--accent-cyan); font-weight: bold;">${pOrder.toFixed(1)}</span></label>
+                <label>Minkowski Order \\(p\\): <span id="p-val" style="color: var(--accent-cyan); font-weight: bold;">${pOrder.toFixed(1)}</span></label>
                 <input type="range" id="p-slider" min="0.5" max="6.0" step="0.5" value="${pOrder}" style="width: 100%;">
               </div>
               <div class="control-item">
@@ -48511,7 +48777,7 @@ function renderWeek3MinkowskiMetricSpace(container) {
               <div class="game-viewport" style="height: 300px;">
                 <canvas id="minkowski-canvas" width="600" height="300" style="width: 100%; height: 100%;"></canvas>
                 <div class="viewport-overlay">
-                  Unit Circle Contour: ({|x_1|^p + |x_2|^p}^{1/p} = 1)
+                  Unit Circle Contour: \\(\\{|x_1|^p + |x_2|^p\\}^{1/p} = 1\\)
                 </div>
               </div>
 
@@ -48536,7 +48802,7 @@ function renderWeek3MinkowskiMetricSpace(container) {
           <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
             <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 12px;">\uD83C\uDFDB️ The 3 Formal Metric Axioms (Week 3)</h3>
             <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
-              For any valid distance metric function (Dis(x, y)) on a metric space:
+              For any valid distance metric function \\(Dis(x, y)\\) on a metric space:
             </p>
 
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px;">
@@ -48560,8 +48826,7 @@ function renderWeek3MinkowskiMetricSpace(container) {
             </div>
 
             <div style="background: rgba(255, 170, 0, 0.08); border-left: 3px solid var(--accent-amber); padding: 10px 14px; border-radius: 4px; font-size: 12px; color: #fde047;">
-              \uD83D\uDCA1 <strong>Pseudo-Metric:</strong> Relaxes strict positivity, permitting (Dis(x, y) = 0) for distinct points (x 
-eq y).
+              \uD83D\uDCA1 <strong>Pseudo-Metric:</strong> Relaxes strict positivity, permitting \\(Dis(x, y) = 0\\) for distinct points \\(x \\neq y\\).
             </div>
           </div>
         ` : `
@@ -48569,11 +48834,11 @@ eq y).
           <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
             <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 10px;">\uD83D\uDCD0 High-Dimensional Text: Cosine vs Euclidean</h3>
             <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 14px;">
-              Why is <strong>Cosine Distance</strong> ((1 - cos	heta)) preferred over Euclidean distance when comparing text embeddings of documents with very different lengths?
+              Why is <strong>Cosine Distance</strong> (\\(1 - \\cos\\theta\\)) preferred over Euclidean distance when comparing text embeddings of documents with very different lengths?
             </p>
             <div class="quiz-options">
               <button class="quiz-option-btn q-opt-mink" data-val="correct">
-                <strong>Length Invariance:</strong> Cosine distance measures vector angular orientation (	heta) regardless of magnitude/word-count, whereas Euclidean distance is inflated purely by document length differences!
+                <strong>Length Invariance:</strong> Cosine distance measures vector angular orientation \\(\\theta\\) regardless of magnitude/word-count, whereas Euclidean distance is inflated purely by document length differences!
               </button>
               <button class="quiz-option-btn q-opt-mink" data-val="wrong">
                 Because Euclidean distance cannot be calculated in spaces with more than 3 dimensions.
@@ -48588,11 +48853,10 @@ eq y).
           <div class="explainer-content">
             <p><strong>Minkowski Norms and Voronoi Partitions:</strong></p>
             <ul>
-              <li>(p = 2): Standard (L_2) Euclidean norm: (sqrt{sum (x_i - y_i)^2})</li>
-              <li>(p = 1): (L_1) Manhattan norm: (sum |x_i - y_i|)</li>
-              <li>(p = 0): Hamming distance: counts number of coordinate mismatches (sum mathbb{I}[x_i 
-eq y_i])</li>
-              <li><strong>Cosine Similarity:</strong> (\frac{A cdot B}{|A||B|} = cos(	heta))</li>
+              <li>\\(p = 2\\): Standard \\(L_2\\) Euclidean norm: \\(\\sqrt{\\sum (x_i - y_i)^2}\\)</li>
+              <li>\\(p = 1\\): \\(L_1\\) Manhattan norm: \\(\\sum |x_i - y_i|\\)</li>
+              <li>\\(p = 0\\): Hamming distance: counts number of coordinate mismatches \\(\\sum \\mathbb{I}[x_i \\neq y_i]\\)</li>
+              <li><strong>Cosine Similarity:</strong> \\(\\frac{A \\cdot B}{\\|A\\|\\|B\\|} = \\cos(\\theta)\\)</li>
             </ul>
           </div>
         </details>
@@ -49477,11 +49741,11 @@ function renderWeek3FeaturePrepEthics(container) {
           <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
             <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 10px;">\uD83D\uDEE1️ Data Contamination Rule & Datasheets for Datasets</h3>
             <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 14px;">
-              What is the strict rule regarding feature scaling parameters ((mu, sigma, min, max)) when evaluating models?
+              What is the strict rule regarding feature scaling parameters (\\(\\mu, \\sigma, \\min, \\max\\)) when evaluating models?
             </p>
             <div class="quiz-options">
               <button class="quiz-option-btn q-opt-prep" data-val="correct">
-                <strong>Strict Train-Only Estimation:</strong> Scaling statistics ((mu, sigma)) must be computed strictly on the Training set, and applied forward to Test data without recalculating on the Test set to prevent <strong>preprocessing data leakage</strong>.
+                <strong>Strict Train-Only Estimation:</strong> Scaling statistics (\\(\\mu, \\sigma\\)) must be computed strictly on the Training set, and applied forward to Test data without recalculating on the Test set to prevent <strong>preprocessing data leakage</strong>.
               </button>
               <button class="quiz-option-btn q-opt-prep" data-val="wrong">
                 Scaling statistics should always be recalculated on the combined dataset to maximize accuracy.
@@ -50285,7 +50549,7 @@ function renderWeek4RocAurocSweeper(container) {
           <div style="animation: fadeIn 0.3s ease;">
             <div class="controls-panel" style="margin-bottom: 16px;">
               <div class="control-item" style="flex: 1;">
-                <label>Decision Threshold (\\tau): <span id="tau-val" style="color: var(--accent-cyan); font-weight: bold;">${threshold.toFixed(2)}</span></label>
+                <label>Decision Threshold \\(\\tau\\): <span id="tau-val" style="color: var(--accent-cyan); font-weight: bold;">${threshold.toFixed(2)}</span></label>
                 <input type="range" id="tau-slider" min="0.05" max="0.95" step="0.05" value="${threshold}" style="width: 100%;">
               </div>
               <div class="control-item">
@@ -50332,7 +50596,7 @@ function renderWeek4RocAurocSweeper(container) {
                 </div>
 
                 <div style="background: rgba(0,0,0,0.4); padding: 8px 12px; border-radius: 4px; font-size: 11px; color: var(--text-muted);">
-                  Lowering (	au 	o 0) pushes Recall (	o 1.0) but spikes False Positives!
+                  Lowering \\(\\tau \\to 0\\) pushes Recall \\(\\to 1.0\\) but spikes False Positives!
                 </div>
               </div>
             </div>
@@ -50363,7 +50627,7 @@ function renderWeek4RocAurocSweeper(container) {
               <div style="background: rgba(255, 51, 68, 0.05); border: 1px solid rgba(255, 51, 68, 0.2); padding: 14px; border-radius: var(--radius-md);">
                 <div style="font-size: 12px; font-weight: 700; color: var(--accent-red);">AUROC &lt; 0.50</div>
                 <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
-                  <strong>Inverted Predictions:</strong> Model has learned the pattern in reverse! Flipping class labels yields (1 - 	ext{AUROC}).
+                  <strong>Inverted Predictions:</strong> Model has learned the pattern in reverse! Flipping class labels yields \\(1 - \\text{AUROC}\\).
                 </div>
               </div>
             </div>
@@ -50757,7 +51021,7 @@ function renderWeek4RegressionMetrics(container) {
           <div style="animation: fadeIn 0.3s ease;">
             <div class="controls-panel" style="margin-bottom: 16px;">
               <div class="control-item" style="flex: 1;">
-                <label>Outlier Sample Target Value (y_{	ext{outlier}}): <span id="outlier-val" style="color: var(--accent-red); font-weight: bold;">${outlierY}</span></label>
+                <label>Outlier Sample Target Value \\(y_{\\text{outlier}}\\): <span id="outlier-val" style="color: var(--accent-red); font-weight: bold;">${outlierY}</span></label>
                 <input type="range" id="outlier-slider" min="90" max="300" step="5" value="${outlierY}" style="width: 100%;">
               </div>
               <div class="control-item">
@@ -50805,7 +51069,7 @@ function renderWeek4RegressionMetrics(container) {
           <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
             <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 10px;">\uD83D\uDCC9 Dummy Regression Baseline: Predicting Mean Target ȳ</h3>
             <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 14px;">
-              Before deploying any sophisticated regression model, always compare its RMSE against a dumb baseline that predicts constant target mean (\bar{y} = \frac{1}{N} sum y_i).
+              Before deploying any sophisticated regression model, always compare its RMSE against a dumb baseline that predicts constant target mean \\(\\bar{y} = \\frac{1}{N} \\sum y_i\\).
             </p>
             <div class="formula-block">
               MSE = (1/N) ∑ (y_i - ŷ_i)²<br>
@@ -51870,6 +52134,22 @@ function switchTab(tabName) {
 }
 window.addEventListener("DOMContentLoaded", async () => {
   await loadModules();
+  const mainContent = document.getElementById("main-content");
+  const mathObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      const target = mutation.target instanceof HTMLElement ? mutation.target : mutation.target.parentElement;
+      if (!target)
+        continue;
+      const addedElements = [...mutation.addedNodes].filter((node) => node instanceof HTMLElement);
+      if (addedElements.length) {
+        addedElements.forEach((node) => renderMath(node));
+      } else if (target.matches(".formula-block, p, li, label")) {
+        renderMath(target);
+      }
+    }
+  });
+  mathObserver.observe(mainContent, { childList: true, subtree: true });
+  renderMath(mainContent);
   function parseHash() {
     if (window.location.hash) {
       const hash = window.location.hash.substring(1);

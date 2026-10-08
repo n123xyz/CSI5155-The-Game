@@ -72,7 +72,7 @@ export function renderWeek4RegressionMetrics(container: HTMLElement) {
           <div style="animation: fadeIn 0.3s ease;">
             <div class="controls-panel" style="margin-bottom: 16px;">
               <div class="control-item" style="flex: 1;">
-                <label>Outlier Sample Target Value \(y_{\text{outlier}}\): <span id="outlier-val" style="color: var(--accent-red); font-weight: bold;">${outlierY}</span></label>
+                <label>Outlier Sample Target Value \\(y_{\\text{outlier}}\\): <span id="outlier-val" style="color: var(--accent-red); font-weight: bold;">${outlierY}</span></label>
                 <input type="range" id="outlier-slider" min="90" max="300" step="5" value="${outlierY}" style="width: 100%;">
               </div>
               <div class="control-item">
@@ -120,7 +120,7 @@ export function renderWeek4RegressionMetrics(container: HTMLElement) {
           <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px;">
             <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 10px;">📉 Dummy Regression Baseline: Predicting Mean Target ȳ</h3>
             <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 14px;">
-              Before deploying any sophisticated regression model, always compare its RMSE against a dumb baseline that predicts constant target mean \(\bar{y} = \frac{1}{N} \sum y_i\).
+              Before deploying any sophisticated regression model, always compare its RMSE against a dumb baseline that predicts constant target mean \\(\\bar{y} = \\frac{1}{N} \\sum y_i\\).
             </p>
             <div class="formula-block">
               MSE = (1/N) ∑ (y_i - ŷ_i)²<br>

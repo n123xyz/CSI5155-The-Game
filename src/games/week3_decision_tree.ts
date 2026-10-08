@@ -290,7 +290,7 @@ export function renderWeek3DecisionTree(container: HTMLElement) {
             <div style="background: rgba(10, 16, 28, 0.9); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 20px;">
               <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 6px;">📈 Purity Measures Comparison: Binary Classification</h3>
               <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
-                As the probability \( p \in [0, 1] \) of the positive class changes, observe how Entropy, Gini Impurity, and Misclassification Error behave:
+                As the probability \\( p \\in [0, 1] \\) of the positive class changes, observe how Entropy, Gini Impurity, and Misclassification Error behave:
               </p>
 
               <!-- Interactive Probability Slider -->
@@ -480,8 +480,8 @@ export function renderWeek3DecisionTree(container: HTMLElement) {
         <details class="math-explainer">
           <summary>💡 Midterm Q14 Official Derivation & Step-by-Step Math (Click to expand)</summary>
           <div class="explainer-content">
-            <p><strong>Candidate 1 (\(t_1 = 5\)):</strong> Splits at \(x=5\). Left: \(\{x_1, x_2\}\) (2 Normal, 0 Faulty) → \(H = 0\). Right: \(\{x_3, x_4, x_5\}\) (0 Normal, 3 Faulty) → \(H = 0\). Weighted Entropy = 0. Therefore, \(IG = 0.971 - 0 = 0.971\) bits.</p>
-            <p><strong>Candidate 2 (\(t_2 = 7\)):</strong> Splits at \(x=7\). Left: \(\{x_1, x_2, x_3\}\) (2 Normal, 1 Faulty). Right: \(\{x_4, x_5\}\) (0 Normal, 2 Faulty) → \(H = 0\). Left entropy \(H = -\frac{2}{3}\log_2\frac{2}{3} - \frac{1}{3}\log_2\frac{1}{3} \approx 0.918\). Weighted = \(\frac{3}{5}(0.918) = 0.551\) bits. \(IG = 0.971 - 0.551 = 0.420\) bits.</p>
+            <p><strong>Candidate 1 (\\(t_1 = 5\\)):</strong> Splits at \\(x=5\\). Left: \\(\\{x_1, x_2\\}\\) (2 Normal, 0 Faulty) → \\(H = 0\\). Right: \\(\\{x_3, x_4, x_5\\}\\) (0 Normal, 3 Faulty) → \\(H = 0\\). Weighted Entropy = 0. Therefore, \\(IG = 0.971 - 0 = 0.971\\) bits.</p>
+            <p><strong>Candidate 2 (\\(t_2 = 7\\)):</strong> Splits at \\(x=7\\). Left: \\(\\{x_1, x_2, x_3\\}\\) (2 Normal, 1 Faulty). Right: \\(\\{x_4, x_5\\}\\) (0 Normal, 2 Faulty) → \\(H = 0\\). Left entropy \\(H = -\\frac{2}{3}\\log_2\\frac{2}{3} - \\frac{1}{3}\\log_2\\frac{1}{3} \\approx 0.918\\). Weighted = \\(\\frac{3}{5}(0.918) = 0.551\\) bits. \\(IG = 0.971 - 0.551 = 0.420\\) bits.</p>
           </div>
         </details>
       </div>

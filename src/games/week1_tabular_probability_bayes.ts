@@ -355,7 +355,7 @@ export function renderWeek1TabularProbabilityBayes(container: HTMLElement) {
             <div style="background: rgba(10, 16, 28, 0.9); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 20px;">
               <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 6px;">⚡ Naive Bayes Real-Time Predictor</h3>
               <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 18px;">
-                Conditional Independence Assumption: \( P(X_1, \dots, X_d \mid Y) = \prod_{i=1}^d P(X_i \mid Y) \). Configure unseen test query probe \( X^* \):
+                Conditional Independence Assumption: \\( P(X_1, \\dots, X_d \\mid Y) = \\prod_{i=1}^d P(X_i \\mid Y) \\). Configure unseen test query probe \\( X^* \\):
               </p>
 
               <!-- Probe selectors -->
@@ -447,10 +447,10 @@ export function renderWeek1TabularProbabilityBayes(container: HTMLElement) {
         <details class="math-explainer">
           <summary>💡 Course Slide Takeaway: Contingency Tables & Bayes Rules (Click to expand)</summary>
           <div class="explainer-content">
-            <p><strong>Sum Rule:</strong> \( P(X = x) = \sum_{y} P(X = x, Y = y) \) computes the marginal distribution by summing across all columns of a joint probability contingency matrix.</p>
-            <p><strong>Product Rule:</strong> \( P(X = x, Y = y) = P(X = x \mid Y = y) \cdot P(Y = y) \).</p>
-            <p><strong>Bayes Rule:</strong> \( P(Y = y \mid X = x) = \frac{P(X = x \mid Y = y) \cdot P(Y = y)}{P(X = x)} \).</p>
-            <p><strong>Zero Frequency Problem & Laplace Smoothing:</strong> If an attribute value never appears with a class, \( P(X_i \mid Y) = 0 \), wiping out the whole product! Additive Laplace smoothing resolves this: \( \hat{P}(X_i = v \mid Y = c) = \frac{\text{Count} + 1}{\text{Total} + |V|} \).</p>
+            <p><strong>Sum Rule:</strong> \\( P(X = x) = \\sum_{y} P(X = x, Y = y) \\) computes the marginal distribution by summing across all columns of a joint probability contingency matrix.</p>
+            <p><strong>Product Rule:</strong> \\( P(X = x, Y = y) = P(X = x \\mid Y = y) \\cdot P(Y = y) \\).</p>
+            <p><strong>Bayes Rule:</strong> \\( P(Y = y \\mid X = x) = \\frac{P(X = x \\mid Y = y) \\cdot P(Y = y)}{P(X = x)} \\).</p>
+            <p><strong>Zero Frequency Problem & Laplace Smoothing:</strong> If an attribute value never appears with a class, \\( P(X_i \\mid Y) = 0 \\), wiping out the whole product! Additive Laplace smoothing resolves this: \\( \\hat{P}(X_i = v \\mid Y = c) = \\frac{\\text{Count} + 1}{\\text{Total} + |V|} \\).</p>
           </div>
         </details>
       </div>

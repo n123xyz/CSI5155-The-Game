@@ -646,6 +646,29 @@ details.math-explainer[open] summary::after {
   overflow-x: auto;
 }
 
+.formula-block .katex-display {
+  margin: 0.25em 0;
+  text-align: left;
+}
+
+.formula-math-line + .formula-math-line {
+  margin-top: 8px;
+}
+
+.formula-text-line + .formula-math-line,
+.formula-math-line + .formula-text-line {
+  margin-top: 8px;
+}
+
+.formula-math-line .katex-display {
+  margin: 0.25em 0;
+  text-align: left;
+}
+
+.formula-block .katex {
+  font-size: 1.05em;
+}
+
 body[data-theme="light"] .formula-block {
   color: #075985;
   background: #eaf2fb;

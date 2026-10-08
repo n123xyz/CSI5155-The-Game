@@ -90,11 +90,11 @@ export function renderWeek2MulticlassShowdown(container: HTMLElement) {
           <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px;">
             <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 12px;">📈 Classifier Complexity Scaling: OvA vs OvO</h3>
             <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 18px;">
-              Drag the class count slider \(K\) to observe how One-vs-One explodes quadratically compared to One-vs-All:
+              Drag the class count slider \\(K\\) to observe how One-vs-One explodes quadratically compared to One-vs-All:
             </p>
 
             <div class="control-item" style="margin-bottom: 24px;">
-              <label>Number of Target Classes (\(K\)): <strong style="color: var(--accent-cyan); font-size: 16px;">${classCountK}</strong></label>
+              <label>Number of Target Classes (\\(K\\)): <strong style="color: var(--accent-cyan); font-size: 16px;">${classCountK}</strong></label>
               <input type="range" id="k-slider" min="3" max="25" step="1" value="${classCountK}" style="width: 100%;">
             </div>
 
@@ -104,7 +104,7 @@ export function renderWeek2MulticlassShowdown(container: HTMLElement) {
                 <div style="font-size: 32px; font-weight: 900; color: var(--accent-cyan); margin: 8px 0; font-family: 'Fira Code', monospace;">
                   ${ovaClassifiers}
                 </div>
-                <div style="font-size: 12px; color: var(--text-secondary);">Linear Growth: \(O(K)\)</div>
+                <div style="font-size: 12px; color: var(--text-secondary);">Linear Growth: \\(O(K)\\)</div>
               </div>
 
               <div style="background: rgba(255, 170, 0, 0.05); border: 1px solid rgba(255, 170, 0, 0.2); padding: 18px; border-radius: var(--radius-md); text-align: center;">
@@ -112,7 +112,7 @@ export function renderWeek2MulticlassShowdown(container: HTMLElement) {
                 <div style="font-size: 32px; font-weight: 900; color: var(--accent-amber); margin: 8px 0; font-family: 'Fira Code', monospace;">
                   ${ovoClassifiers}
                 </div>
-                <div style="font-size: 12px; color: var(--text-secondary);">Quadratic Explosion: \(\frac{K(K-1)}{2} = O(K^2)\)</div>
+                <div style="font-size: 12px; color: var(--text-secondary);">Quadratic Explosion: \\(\\frac{K(K-1)}{2} = O(K^2)\\)</div>
               </div>
             </div>
           </div>
@@ -121,11 +121,11 @@ export function renderWeek2MulticlassShowdown(container: HTMLElement) {
           <div style="animation: fadeIn 0.3s ease; background: rgba(10, 15, 25, 0.8); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px;">
             <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 12px;">🎯 Quick Mastery Check: ImageNet Scaling</h3>
             <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
-              If training a dataset with \(K = 1000\) visual categories (e.g., ImageNet), why is OvO strictly avoided in favor of Softmax or OvA?
+              If training a dataset with \\(K = 1000\\) visual categories (e.g., ImageNet), why is OvO strictly avoided in favor of Softmax or OvA?
             </p>
             <div class="quiz-options">
               <button class="quiz-option-btn q-opt-mc" data-val="correct">
-                <strong>Computational Intractability:</strong> OvO would require training \(\frac{1000 \times 999}{2} = 499,500\) individual binary classifiers, requiring astronomical memory and evaluation time!
+                <strong>Computational Intractability:</strong> OvO would require training \\(\\frac{1000 \\times 999}{2} = 499,500\\) individual binary classifiers, requiring astronomical memory and evaluation time!
               </button>
               <button class="quiz-option-btn q-opt-mc" data-val="wrong">
                 Because OvO cannot compute majority votes when K is an even number.
@@ -140,7 +140,7 @@ export function renderWeek2MulticlassShowdown(container: HTMLElement) {
           <div class="explainer-content">
             <p><strong>Multi-Class Decision Rules:</strong></p>
             <ul>
-              <li><strong>Softmax Log-Loss:</strong> \(L = -\sum_{i=1}^K y_i \ln \hat{y}_i\), where \(\hat{y}_i = \frac{e^{z_i}}{\sum e^{z_j}}\). Gradient with respect to logit \(z_i\) is simply \((\hat{y}_i - y_i)\).</li>
+              <li><strong>Softmax Log-Loss:</strong> \\(L = -\\sum_{i=1}^K y_i \\ln \\hat{y}_i\\), where \\(\\hat{y}_i = \\frac{e^{z_i}}{\\sum e^{z_j}}\\). Gradient with respect to logit \\(z_i\\) is simply \\((\\hat{y}_i - y_i)\\).</li>
               <li><strong>OvA Imbalance:</strong> In OvA, each binary classifier suffers from an artificial class imbalance ratio of \(1 : (K-1)\), often requiring cost-sensitive adjustment.</li>
             </ul>
           </div>
