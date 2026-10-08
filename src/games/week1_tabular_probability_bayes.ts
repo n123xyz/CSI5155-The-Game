@@ -77,6 +77,18 @@ export function renderWeek1TabularProbabilityBayes(container: HTMLElement) {
       expl: 'Out of 5 "No" samples, 4 have High humidity (Rows 1, 2, 8, 14). So P(High | No) = 4/5 = 0.800.'
     }
   ];
+  const practiceChoiceOrders = PRACTICE_QUESTIONS.map(question => {
+    const order = question.choices.map((_, index) => index);
+    for (let index = order.length - 1; index > 0; index--) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      [order[index], order[swapIndex]] = [order[swapIndex]!, order[index]!];
+    }
+    if (order[0] === question.correct) {
+      const firstIncorrect = order.findIndex(index => index !== question.correct);
+      [order[0], order[firstIncorrect]] = [order[firstIncorrect]!, order[0]!];
+    }
+    return order;
+  });
 
   // Naive Bayes Test query state
   let testOutlook: 'Sunny' | 'Overcast' | 'Rain' = 'Sunny';
@@ -332,9 +344,9 @@ export function renderWeek1TabularProbabilityBayes(container: HTMLElement) {
               </h3>
 
               <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px;">
-                ${PRACTICE_QUESTIONS[currentQuestionIdx]!.choices.map((choice, idx) => `
-                  <button class="btn btn-secondary btn-q-choice" data-idx="${idx}" style="text-align: left; padding: 14px 18px; font-family:'Fira Code'; font-size: 13px;">
-                    ${String.fromCharCode(65 + idx)}) ${choice}
+                ${practiceChoiceOrders[currentQuestionIdx]!.map((choiceIdx, displayIdx) => `
+                  <button class="btn btn-secondary btn-q-choice" data-idx="${choiceIdx}" style="text-align: left; padding: 14px 18px; font-family:'Fira Code'; font-size: 13px;">
+                    ${String.fromCharCode(65 + displayIdx)}) ${PRACTICE_QUESTIONS[currentQuestionIdx]!.choices[choiceIdx]}
                   </button>
                 `).join('')}
               </div>

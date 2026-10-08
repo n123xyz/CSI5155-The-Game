@@ -277,25 +277,17 @@ function renderCurrentView() {
     const firstGame = weekConfig.games[0];
     if (!firstGame) return;
     let selectedGame = currentSubGame[weekId] ?? firstGame.id;
-    let weekProgress = gameManager.getWeekProgress(weekId);
+    const weekProgress = gameManager.getWeekProgress(weekId);
 
-    if (!weekProgress.beforeComplete) {
+    if (!weekProgress.beforeComplete && selectedGame !== AFTER_FLASHCARDS) {
       selectedGame = BEFORE_FLASHCARDS;
     } else if (selectedGame === BEFORE_FLASHCARDS) {
       selectedGame = firstGame.id;
     }
     currentSubGame[weekId] = selectedGame;
 
-    let allContentComplete = weekConfig.games.every(game => weekProgress.completedGames.includes(game.id));
-    if (selectedGame === AFTER_FLASHCARDS && !allContentComplete) {
-      selectedGame = weekConfig.games.find(game => !weekProgress.completedGames.includes(game.id))?.id
-        ?? firstGame.id;
-      currentSubGame[weekId] = selectedGame;
-    }
-
     if (weekConfig.games.some(game => game.id === selectedGame)) {
       gameManager.markWeekGameVisited(weekId, selectedGame);
-      weekProgress = gameManager.getWeekProgress(weekId);
     }
 
     subNavBar.style.display = 'flex';
@@ -304,7 +296,7 @@ function renderCurrentView() {
     const navItems = [
       { id: BEFORE_FLASHCARDS, label: `Before-week flashcards (${weekProgress.beforeComplete ? 'complete' : 'start'})`, disabled: weekProgress.beforeComplete },
       ...weekConfig.games.map(game => ({ ...game, disabled: !weekProgress.beforeComplete })),
-      { id: AFTER_FLASHCARDS, label: 'After-week flashcards', disabled: !allContentComplete },
+      { id: AFTER_FLASHCARDS, label: 'After-week flashcards', disabled: false },
     ];
     subNavBar.innerHTML = navItems.map(item => `
       <button class="sub-nav-btn ${selectedGame === item.id ? 'active' : ''}" data-gameid="${item.id}" ${item.disabled ? 'disabled' : ''}>
@@ -333,32 +325,6 @@ function renderCurrentView() {
     } else {
       const activeGame = weekConfig.games.find(g => g.id === selectedGame) || firstGame;
       activeGame.render(mainContent);
-
-      const isComplete = weekProgress.completedGames.includes(activeGame.id);
-      const lessonFooter = document.createElement('section');
-      lessonFooter.className = 'week-lesson-completion';
-      const completionMessage = document.createElement('p');
-      completionMessage.textContent = isComplete
-        ? 'Subtask complete. Your progress is saved.'
-        : 'Finish this subtask, then mark it complete to unlock the after-week flashcards.';
-      const completionButton = document.createElement('button');
-      completionButton.type = 'button';
-      completionButton.dataset.completeWeekGame = '';
-      completionButton.className = 'btn btn-secondary btn-sm';
-      completionButton.textContent = isComplete ? 'Subtask complete ✓' : 'Mark subtask complete';
-      completionButton.disabled = isComplete;
-      completionButton.addEventListener('click', () => {
-        gameManager.markWeekGameComplete(weekId, activeGame.id);
-        completionButton.disabled = true;
-        completionButton.textContent = 'Subtask complete ✓';
-        completionMessage.textContent = 'Subtask complete. Your progress is saved.';
-        const progress = gameManager.getWeekProgress(weekId);
-        const allComplete = weekConfig.games.every(game => progress.completedGames.includes(game.id));
-        const afterFlashcards = subNavBar.querySelector<HTMLButtonElement>(`[data-gameid="${AFTER_FLASHCARDS}"]`);
-        if (afterFlashcards) afterFlashcards.disabled = !allComplete;
-      });
-      lessonFooter.append(completionMessage, completionButton);
-      mainContent.appendChild(lessonFooter);
     }
   }
 }

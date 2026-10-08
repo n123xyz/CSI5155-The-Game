@@ -117,21 +117,15 @@ async function runTest() {
     if (!datasaurusInlineMath.some(tex => tex.includes('\\bar{x}'))) {
       throw new Error('The Datasaurus mean equation did not preserve its overbar notation.');
     }
-    for (const gameId of ['paradigms', 'mitchell', 'datasaurus', 'vector', 'bayes']) {
-      await page.click(`.sub-nav-btn[data-gameid="${gameId}"]`);
+    const afterDeckButton = page.locator('.sub-nav-btn[data-gameid="flashcards-after"]');
+    if (await afterDeckButton.isDisabled()) {
+      throw new Error('The after-week deck should be accessible without completing lesson subtasks.');
     }
-    if (!(await page.locator('.sub-nav-btn[data-gameid="flashcards-after"]').isDisabled())) {
-      throw new Error('The after-week deck should remain locked until every subtask is marked complete.');
-    }
-    for (const gameId of ['paradigms', 'mitchell', 'datasaurus', 'vector', 'bayes']) {
-      await page.click(`.sub-nav-btn[data-gameid="${gameId}"]`);
-      await page.click('[data-complete-week-game]');
-    }
-    if (await page.locator('.sub-nav-btn[data-gameid="flashcards-after"]').isDisabled()) {
-      throw new Error('The after-week deck did not unlock after completing all week content.');
-    }
-    await page.click('.sub-nav-btn[data-gameid="flashcards-after"]');
+    await afterDeckButton.click();
     await page.waitForSelector('.flashcard-deck');
+    if (!(await afterDeckButton.evaluate(button => button.classList.contains('active')))) {
+      throw new Error('Selecting the after-week deck did not open it.');
+    }
     if (!(await page.locator('.flashcard-card-number').textContent())?.includes('CARD 001')) {
       throw new Error('The after-week deck did not repeat the source cards.');
     }
@@ -159,6 +153,38 @@ async function runTest() {
         throw new Error(`${week} loaded an unexpected number of flashcards.`);
       }
     }
+    const bayesPage = await browser.newPage();
+    await bayesPage.addInitScript(() => {
+      const weekProgress = Object.fromEntries(
+        ['week1', 'week2', 'week3', 'week4', 'week5'].map(week => [
+          week,
+          { beforeComplete: true, afterComplete: false, visitedGames: [], completedGames: [] },
+        ]),
+      );
+      localStorage.setItem('csi5155_ml_game_state_v1', JSON.stringify({ weekProgress }));
+    });
+    await bayesPage.goto(`http://localhost:${PORT}/#week1`, { waitUntil: 'networkidle' });
+    await bayesPage.click('.sub-nav-btn[data-gameid="bayes"]');
+    await bayesPage.click('#tab-practice');
+    const correctBayesAnswers = ['9 / 14', '5 / 14', '2 / 9', '3 / 5', '2 / 5', '4 / 5'];
+    for (let question = 0; question < correctBayesAnswers.length; question++) {
+      const firstChoiceIndex = await bayesPage.locator('.btn-q-choice').first().getAttribute('data-idx');
+      if (firstChoiceIndex === '0') {
+        throw new Error(`Week 1 tabular probability question ${question + 1} still puts the correct answer first.`);
+      }
+      const correctChoice = bayesPage.locator('.btn-q-choice').filter({ hasText: correctBayesAnswers[question]! });
+      if (!(await correctChoice.count())) {
+        throw new Error(`Week 1 tabular probability question ${question + 1} is missing its correct answer.`);
+      }
+      await correctChoice.click();
+      if (!(await bayesPage.locator('#practice-feedback').textContent())?.includes('Correct!')) {
+        throw new Error(`Week 1 tabular probability question ${question + 1} did not grade the shuffled correct answer.`);
+      }
+      if (question < correctBayesAnswers.length - 1) {
+        await bayesPage.click('#btn-next-q');
+      }
+    }
+    await bayesPage.close();
     const auditPage = await browser.newPage();
     await auditPage.addInitScript(() => {
       const weekProgress = Object.fromEntries(
