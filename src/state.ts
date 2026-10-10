@@ -4,7 +4,10 @@ export interface PlayerState {
   streak: number;
   completedGames: Record<string, boolean>;
   quizScores: Record<string, { score: number; maxScore: number; date: string }>;
-  flashcardRuns: Record<string, { ratedCards: Record<string, boolean> }>;
+  flashcardRuns: Record<string, {
+    ratedCards: Record<string, boolean>;
+    reviewQueue?: { cardIds: string[]; reviewedCardIds: string[] };
+  }>;
   weekProgress: Record<string, { beforeComplete: boolean; afterComplete: boolean; visitedGames: string[]; completedGames: string[] }>;
   currentWeek: string;
   soundEnabled: boolean;
@@ -140,6 +143,34 @@ class StateManager {
 
   getFlashcardRun(weekId: string, phase: 'before' | 'after') {
     return this.state.flashcardRuns[`${weekId}:${phase}`] ?? { ratedCards: {} };
+  }
+
+  startFlashcardReview(weekId: string, phase: 'before' | 'after') {
+    const key = `${weekId}:${phase}`;
+    const run = this.getFlashcardRun(weekId, phase);
+    const cardIds = Object.entries(run.ratedCards)
+      .filter(([, knewIt]) => !knewIt)
+      .map(([cardId]) => cardId);
+    this.state.flashcardRuns[key] = {
+      ...run,
+      reviewQueue: { cardIds, reviewedCardIds: [] },
+    };
+    this.save();
+  }
+
+  markFlashcardReviewed(weekId: string, phase: 'before' | 'after', cardId: string) {
+    const key = `${weekId}:${phase}`;
+    const run = this.getFlashcardRun(weekId, phase);
+    const queue = run.reviewQueue;
+    if (!queue || queue.reviewedCardIds.includes(cardId)) return;
+    this.state.flashcardRuns[key] = {
+      ...run,
+      reviewQueue: {
+        ...queue,
+        reviewedCardIds: [...queue.reviewedCardIds, cardId],
+      },
+    };
+    this.save();
   }
 
   rateFlashcard(weekId: string, phase: 'before' | 'after', cardId: string, knewIt: boolean) {

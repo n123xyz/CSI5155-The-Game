@@ -281,8 +281,6 @@ function renderCurrentView() {
 
     if (!weekProgress.beforeComplete && selectedGame !== AFTER_FLASHCARDS) {
       selectedGame = BEFORE_FLASHCARDS;
-    } else if (selectedGame === BEFORE_FLASHCARDS) {
-      selectedGame = firstGame.id;
     }
     currentSubGame[weekId] = selectedGame;
 
@@ -294,7 +292,7 @@ function renderCurrentView() {
 
     // Populate sub nav bar
     const navItems = [
-      { id: BEFORE_FLASHCARDS, label: `Before-week flashcards (${weekProgress.beforeComplete ? 'complete' : 'start'})`, disabled: weekProgress.beforeComplete },
+      { id: BEFORE_FLASHCARDS, label: `Before-week flashcards (${weekProgress.beforeComplete ? 'complete' : 'start'})`, disabled: false },
       ...weekConfig.games.map(game => ({ ...game, disabled: !weekProgress.beforeComplete })),
       { id: AFTER_FLASHCARDS, label: 'After-week flashcards', disabled: false },
     ];

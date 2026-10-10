@@ -188,7 +188,14 @@ function renderCard(
 ) {
   const run = gameManager.getFlashcardRun(week, phase);
   const rated = run.ratedCards;
-  const card = deck.cards.find(item => !(item.id in rated));
+  const reviewQueue = run.reviewQueue;
+  const reviewedCardIds = reviewQueue?.reviewedCardIds ?? [];
+  const reviewCardId = reviewQueue?.cardIds.find(cardId =>
+    rated[cardId] === false && !reviewedCardIds.includes(cardId),
+  );
+  const card = reviewQueue
+    ? deck.cards.find(item => item.id === reviewCardId)
+    : deck.cards.find(item => !(item.id in rated));
   const finished = !card;
   const reviewCount = Object.values(rated).filter(knewIt => !knewIt).length;
   const phaseLabel = phase === 'before' ? 'Before the week' : 'After the week';
@@ -205,34 +212,42 @@ function renderCard(
           <span class="concept-badge">Week ${week.slice(-1)} • ${deck.cards.length} cards</span>
         </div>
         <div class="flashcard-complete">
-          <h3>Deck complete</h3>
-          <p>You marked every card. ${reviewCount} ${reviewCount === 1 ? 'card is' : 'cards are'} flagged for another look.</p>
-          ${phase === 'after' ? '<p>This week’s before-and-after flashcard rounds are complete.</p>' : '<p>Your week content is now unlocked.</p>'}
-          ${phase === 'before' ? '<button class="btn btn-primary" type="button" data-start-week>Start week content</button>' : ''}
+          <h3>${reviewQueue ? 'Review pass complete' : 'Deck complete'}</h3>
+          <p>${reviewQueue ? 'You finished this review pass.' : 'You marked every card in the deck.'} ${reviewCount} ${reviewCount === 1 ? 'card remains' : 'cards remain'} flagged for review.</p>
+          ${reviewCount ? `<button class="btn btn-secondary" type="button" data-start-review>Review flagged cards (${reviewCount})</button>` : ''}
+          ${phase === 'after' && reviewCount === 0 ? '<p>This week’s before-and-after flashcard rounds are complete.</p>' : ''}
+          ${phase === 'before' ? '<p>Your week content is now unlocked.</p><button class="btn btn-primary" type="button" data-start-week>Start week content</button>' : ''}
         </div>
       </section>
     `;
+    container.querySelector('[data-start-review]')?.addEventListener('click', () => {
+      gameManager.startFlashcardReview(week, phase);
+      container.dataset.revealed = 'false';
+      renderCard(container, week, phase, deck, token, onBeforeComplete);
+    });
     container.querySelector('[data-start-week]')?.addEventListener('click', () => onBeforeComplete?.());
     return;
   }
 
-  const position = Object.keys(rated).length + 1;
+  const position = reviewQueue ? reviewedCardIds.length + 1 : Object.keys(rated).length + 1;
+  const progressMax = reviewQueue ? reviewQueue.cardIds.length : deck.cards.length;
+  const progressValue = reviewQueue ? reviewedCardIds.length : Object.keys(rated).length;
   container.innerHTML = `
     <section class="game-card flashcard-deck">
       <div class="card-header">
         <div class="card-title-group">
-          <h2>${escapeHtml(phaseLabel)} flashcards</h2>
+          <h2>${reviewQueue ? `${escapeHtml(phaseLabel)} review` : `${escapeHtml(phaseLabel)} flashcards`}</h2>
           <p class="card-subtitle">${escapeHtml(deck.title)}</p>
         </div>
         <span class="concept-badge">Week ${week.slice(-1)} • ${deck.cards.length} cards</span>
       </div>
 
       <div class="flashcard-progress-row">
-        <span>Card ${position} of ${deck.cards.length}</span>
+        <span>${reviewQueue ? 'Review card' : 'Card'} ${position} of ${progressMax}</span>
         <span>${reviewCount} flagged to review</span>
       </div>
-      <div class="flashcard-progress-track" role="progressbar" aria-label="Flashcards completed" aria-valuemin="0" aria-valuemax="${deck.cards.length}" aria-valuenow="${Object.keys(rated).length}">
-        <span style="width: ${(Object.keys(rated).length / deck.cards.length) * 100}%"></span>
+      <div class="flashcard-progress-track" role="progressbar" aria-label="${reviewQueue ? 'Review cards completed' : 'Flashcards completed'}" aria-valuemin="0" aria-valuemax="${progressMax}" aria-valuenow="${progressValue}">
+        <span style="width: ${(progressValue / progressMax) * 100}%"></span>
       </div>
 
       <article class="flashcard" aria-labelledby="flashcard-front-label">
@@ -247,8 +262,8 @@ function renderCard(
 
       <div class="flashcard-actions">
         ${container.dataset.revealed === 'true' ? `
-          <button class="btn btn-primary" type="button" data-rate="known">I knew this</button>
-          <button class="btn btn-secondary" type="button" data-rate="review">Review again</button>
+          <button class="btn btn-primary" type="button" data-rate="known">${reviewQueue ? 'I know this now' : 'I knew this'}</button>
+          <button class="btn btn-secondary" type="button" data-rate="review">${reviewQueue ? 'Keep flagged' : 'Review again'}</button>
         ` : '<button class="btn btn-primary" type="button" data-reveal>Reveal answer</button>'}
       </div>
     </section>
@@ -263,6 +278,7 @@ function renderCard(
     button.addEventListener('click', () => {
       if (container.dataset.flashcardRenderToken !== String(token)) return;
       gameManager.rateFlashcard(week, phase, card.id, button.dataset.rate === 'known');
+      if (reviewQueue) gameManager.markFlashcardReviewed(week, phase, card.id);
       container.dataset.revealed = 'false';
       renderCard(container, week, phase, deck, token, onBeforeComplete);
     });
