@@ -108,11 +108,46 @@ async function runTest() {
           throw new Error('Inline math was not rendered with KaTeX styles.');
         }
       }
-      await page.click('[data-rate="known"]');
+      await page.click(i < 2 ? '[data-rate="review"]' : '[data-rate="known"]');
     }
     await page.waitForSelector('.flashcard-complete');
     if (!(await page.locator('.flashcard-complete').textContent())?.includes('Your week content is now unlocked.')) {
       throw new Error('Completing the first deck did not unlock week content.');
+    }
+    if (await page.locator('[data-start-review]').textContent() !== 'Review flagged cards (2)') {
+      throw new Error('The before-week deck did not offer a review pass for its flagged cards.');
+    }
+    await page.click('[data-start-review]');
+    if (!(await page.locator('.flashcard-card-number').textContent())?.includes('CARD 001')) {
+      throw new Error('The flagged before-week card was not available in the review pass.');
+    }
+    await page.click('[data-reveal]');
+    if (!(await page.locator('.flashcard-answer').isVisible())) {
+      throw new Error('The flagged card answer was not available during review.');
+    }
+    await page.click('[data-rate="review"]');
+    await page.click('[data-reveal]');
+    await page.click('[data-rate="known"]');
+    await page.waitForSelector('[data-start-review]');
+    if (!(await page.locator('.flashcard-complete').textContent())?.includes('1 card remains')) {
+      throw new Error('Keeping a card flagged did not leave it available for another review.');
+    }
+    await page.click('[data-start-week]');
+    const beforeDeckButton = page.locator('.sub-nav-btn[data-gameid="flashcards-before"]');
+    if (await beforeDeckButton.isDisabled()) {
+      throw new Error('The completed before-week deck should remain accessible for later review.');
+    }
+    await beforeDeckButton.click();
+    await page.waitForSelector('[data-start-review]');
+    await page.click('[data-start-review]');
+    if (!(await page.locator('.flashcard-card-number').textContent())?.includes('CARD 001')) {
+      throw new Error('A flagged card could not be reviewed after returning from week content.');
+    }
+    await page.click('[data-reveal]');
+    await page.click('[data-rate="known"]');
+    await page.waitForSelector('.flashcard-complete');
+    if (!(await page.locator('.flashcard-complete').textContent())?.includes('0 cards remain')) {
+      throw new Error('Marking a reviewed card as known did not clear its review flag.');
     }
     await page.click('[data-start-week]');
     await page.waitForFunction(() => !document.querySelector('.sub-nav-btn[data-gameid="paradigms"]')?.hasAttribute('disabled'));
