@@ -1269,6 +1269,115 @@ body[data-theme="light"] .game-feedback-error {
   line-height: 1.65;
 }
 
+.calculation-lab > p,
+.calculation-prompt {
+  max-width: 1000px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.calculation-title {
+  margin: 22px 0 8px;
+  color: var(--accent-cyan);
+  font-size: 20px;
+}
+
+.calculation-formula {
+  padding: 12px 14px;
+  overflow-wrap: anywhere;
+  border-left: 3px solid var(--accent-purple);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: rgba(10, 15, 25, 0.5);
+  color: var(--text-primary);
+  font-family: 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.calculation-input-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.calculation-input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.calculation-input input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.calculation-input input.is-correct {
+  border-color: var(--accent-green);
+}
+
+.calculation-input input.is-incorrect {
+  border-color: var(--accent-red);
+}
+
+.calculation-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.calculation-feedback {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.calculation-solution {
+  margin: 18px 0;
+  padding: 14px 18px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: rgba(10, 15, 25, 0.45);
+  color: var(--text-primary);
+  line-height: 1.65;
+}
+
+.calculation-solution h4 {
+  margin: 0 0 8px;
+  color: var(--accent-green);
+}
+
+.calculation-solution ol {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.calculation-solution li + li {
+  margin-top: 6px;
+}
+
+.calculation-reference {
+  margin-top: 22px !important;
+}
+
+.calculation-lab button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+body[data-theme="light"] .calculation-formula,
+body[data-theme="light"] .calculation-solution {
+  background: rgba(255, 255, 255, 0.72);
+}
+
 .speed-run-panel .card-header {
   gap: 16px;
 }
