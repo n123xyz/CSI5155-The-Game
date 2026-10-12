@@ -1263,6 +1263,70 @@ body[data-theme="light"] .game-feedback-error {
   transition: width 0.2s ease;
 }
 
+.speed-run-panel > p {
+  max-width: 900px;
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+
+.speed-run-panel .card-header {
+  gap: 16px;
+}
+
+.speed-run-question {
+  margin: 22px 0 16px;
+  color: var(--text-primary);
+  font-size: 19px;
+  line-height: 1.5;
+}
+
+.speed-run-choice:disabled {
+  cursor: default;
+  opacity: 0.78;
+}
+
+.speed-run-choice.selected[data-correct="true"] {
+  border-color: var(--accent-green);
+}
+
+.speed-run-feedback {
+  margin: 12px 0;
+  line-height: 1.6;
+}
+
+.speed-run-feedback p {
+  margin: 0;
+}
+
+.speed-run-results {
+  padding: 20px 0 8px;
+  text-align: center;
+}
+
+.speed-run-results h3 {
+  color: var(--accent-cyan);
+  font-size: 24px;
+}
+
+.speed-run-results .concept-badge {
+  display: inline-block;
+  margin: 8px 0 18px;
+}
+
+body[data-theme="light"] .speed-run-question {
+  color: var(--text-primary);
+}
+
+@media (max-width: 640px) {
+  .speed-run-panel .card-header {
+    flex-direction: column;
+  }
+
+  .speed-run-panel .flashcard-progress-row {
+    flex-wrap: wrap;
+  }
+}
+
 .flashcard {
   padding: 24px;
   border: 1px solid var(--border-color);
