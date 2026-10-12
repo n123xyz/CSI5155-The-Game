@@ -453,6 +453,58 @@ async function runTest() {
     }
     console.log('✓ Speed Run question flow, scoring, feedback, topic coverage, reference, and replay verified.');
 
+    console.log('Checking the calculation lab with worked numeric answers...');
+    await page.click('button[data-tab="calculations"]');
+    const calculationAnswers = [
+      [0.985, 0.985, 0.965, 0.020],
+      [0.375, 0.375, 0.375],
+      [0.5, 2],
+      [0.6, 0.6, 0.6, 0.6, 0.4, 0.6],
+      [0, 0.6, 0.4, 0.6, 0.6, 1],
+      [7, 5, 2, 2, 3.5],
+      [3, -4, -8, 1.4, 1.8],
+    ];
+    const expectedCalculationTitles = [
+      'Entropy & information gain',
+      'Gini impurity',
+      'Normalization & standardization',
+      'Confusion-matrix metrics',
+      'Plotting ROC points by hand',
+      'Minkowski distance & SMOTE',
+      'Linear regression gradient update',
+    ];
+    for (let exercise = 0; exercise < calculationAnswers.length; exercise++) {
+      if (!(await page.locator('.calculation-title').textContent())?.includes(expectedCalculationTitles[exercise]!)) {
+        throw new Error(`Calculation exercise ${exercise + 1} did not match the study guide.`);
+      }
+      const inputs = page.locator('[data-calc-answer]');
+      const answers = calculationAnswers[exercise]!;
+      if (exercise === 0) {
+        await inputs.nth(0).fill('42');
+        await page.locator('[data-calc-form] button[type="submit"]').click();
+        if (!(await page.locator('.calculation-feedback').textContent())?.includes('Not all results are correct')) {
+          throw new Error('Calculation Lab should reject incorrect intermediate work.');
+        }
+      }
+      for (let answerIndex = 0; answerIndex < answers.length; answerIndex++) {
+        await inputs.nth(answerIndex).fill(String(answers[answerIndex]));
+      }
+      await page.locator('[data-calc-form] button[type="submit"]').click();
+      if (!(await page.locator('.calculation-feedback').textContent())?.includes('All calculations are correct')
+        || !(await page.locator('.calculation-solution').isVisible())) {
+        throw new Error(`Calculation exercise ${exercise + 1} should accept correct work and show its derivation.`);
+      }
+      await page.click('[data-calc-next]');
+    }
+    if (!(await page.locator('[data-calculation-lab]').textContent())?.includes('7 / 7 solved')) {
+      throw new Error('Calculation Lab should report all seven completed exercises.');
+    }
+    await page.click('[data-calc-restart]');
+    if (!(await page.locator('.calculation-title').textContent())?.includes('Entropy & information gain')) {
+      throw new Error('Calculation Lab replay should restart at the first exercise.');
+    }
+    console.log('✓ Numeric calculation, validation, worked solutions, completion, and replay verified.');
+
     console.log('Clicking Midterm Practice Exam tab...');
     await page.click('button[data-tab="midterm"]');
     await page.waitForTimeout(500);

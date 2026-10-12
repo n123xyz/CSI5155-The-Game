@@ -4,6 +4,7 @@ import { renderWeekFlashcards } from './flashcards';
 import { renderMath } from './math';
 import { shuffleQuizOptions } from './quiz-options';
 import { renderSpeedRun } from './speed_run';
+import { renderCalculationLab } from './calculation_lab';
 
 // Week 1 Games
 import { renderWeek1ParadigmSorter } from './games/week1_paradigm_sorter';
@@ -274,6 +275,9 @@ function renderCurrentView() {
   } else if (currentTab === 'speedrun') {
     subNavBar.style.display = 'none';
     renderSpeedRun(mainContent);
+  } else if (currentTab === 'calculations') {
+    subNavBar.style.display = 'none';
+    renderCalculationLab(mainContent);
   } else if (NAV_CONFIG[currentTab]) {
     const weekConfig = NAV_CONFIG[currentTab];
     if (!weekConfig) return;
