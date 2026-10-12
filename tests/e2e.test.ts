@@ -403,6 +403,56 @@ async function runTest() {
     await auditPage.close();
     console.log('✓ All five weekly decks and the complete Week 1 flow verified.');
 
+    console.log('Checking the timed Speed Run across all supplied study topics...');
+    await page.click('button[data-tab="speedrun"]');
+    if (!(await page.locator('.speed-run-panel').textContent())?.includes('29 questions')) {
+      throw new Error('Speed Run overview should advertise all 29 questions.');
+    }
+    const referenceResponse = await page.evaluate(async () => {
+      const response = await fetch('/speed-run-reference.md');
+      return { ok: response.ok, text: await response.text() };
+    });
+    if (!referenceResponse.ok || referenceResponse.text.trim().split('\n').length !== 523) {
+      throw new Error('The complete 523-line study reference should be available from the Speed Run.');
+    }
+    await page.click('[data-speed-start]');
+    const visitedSpeedRunSections = new Set<string>();
+    for (let question = 0; question < 29; question++) {
+      const category = await page.locator('[data-speed-category]').textContent();
+      if (category) visitedSpeedRunSections.add(category);
+      if (question === 0) {
+        await page.locator('.speed-run-choice:not([data-correct="true"])').first().click();
+        if (!(await page.locator('.speed-run-choice:disabled').count())) {
+          throw new Error('Speed Run choices should be locked after an answer to prevent repeat scoring.');
+        }
+        if (!(await page.locator('.speed-run-feedback').textContent())?.includes('Not quite')) {
+          throw new Error('An incorrect answer should display feedback and its explanation.');
+        }
+      } else {
+        await page.locator('.speed-run-choice[data-correct="true"]').click();
+      }
+      await page.click('[data-speed-next]');
+    }
+    const speedRunResult = await page.locator('.speed-run-results').textContent();
+    if (!speedRunResult?.includes('28 / 29') || !speedRunResult.includes('Speed Run Score: 2800')) {
+      throw new Error(`Expected final Speed Run result of 28/29 and 2800 points, got: ${speedRunResult}`);
+    }
+    const expectedSpeedRunSections = [
+      'On-paper calculations',
+      'Gradient descent',
+      'Classification fundamentals',
+      'Generalization & evaluation',
+      'Quick-check concepts',
+    ];
+    if (expectedSpeedRunSections.some(section => !visitedSpeedRunSections.has(section))) {
+      throw new Error(`Speed Run missed a study section: ${[...visitedSpeedRunSections].join(', ')}`);
+    }
+    await page.click('[data-speed-retry]');
+    if (!(await page.locator('[data-speed-start]').count())) {
+      throw new Error('Speed Run replay should return to its introduction.');
+    }
+    console.log('✓ Speed Run question flow, scoring, feedback, topic coverage, reference, and replay verified.');
+
     console.log('Clicking Midterm Practice Exam tab...');
     await page.click('button[data-tab="midterm"]');
     await page.waitForTimeout(500);
