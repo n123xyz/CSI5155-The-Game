@@ -45307,7 +45307,23 @@ var EXERCISES = [
     title: "Entropy & information gain",
     section: "Decision tree calculations",
     prompt: "From the guide’s seven-student table, compute the parent entropy, the Study Time information gain, and the Sleep Quality weighted entropy and information gain.",
-    formula: "H(D) = −Σ pᵢ log₂(pᵢ); IG(Y, X) = H(Y) − H(Y | X)",
+    formula: String.raw`\begin{aligned}
+      H(Y) &= -\sum_{i=1}^{k} p_i \log_2(p_i) \\
+      IG(Y, X) &= H(Y) - H(Y \mid X)
+    \end{aligned}`,
+    table: {
+      caption: "Seven-student decision-tree practice data",
+      headers: ["Student", "Study Time", "Sleep Quality", "Result"],
+      rows: [
+        ["1", "High", "Good", "Pass"],
+        ["2", "High", "Poor", "Pass"],
+        ["3", "Low", "Good", "Fail"],
+        ["4", "Low", "Poor", "Fail"],
+        ["5", "High", "Good", "Pass"],
+        ["6", "Low", "Good", "Fail"],
+        ["7", "High", "Poor", "Pass"]
+      ]
+    },
     answers: [
       { label: "Parent entropy H(D), in bits", value: parentEntropy },
       { label: "Study Time information gain, in bits", value: parentEntropy },
@@ -45325,7 +45341,19 @@ var EXERCISES = [
     title: "Gini impurity",
     section: "Decision tree calculations",
     prompt: "A candidate split has a left child with 3 positive and 1 negative example, and a right child with 1 positive and 3 negative examples. Calculate each child’s Gini and the weighted split Gini.",
-    formula: "Gini(D) = 1 − Σ pᵢ²; Gini(split) = Σ (Nchild / N) × Gini(child)",
+    formula: String.raw`\begin{aligned}
+      \operatorname{Gini}(D) &= 1 - \sum_{i=1}^{C} p_i^2 \\
+      \operatorname{Gini}(\text{split}) &=
+      \sum_{j} \frac{N_j}{N}\operatorname{Gini}(D_j)
+    \end{aligned}`,
+    table: {
+      caption: "Class counts for the candidate split",
+      headers: ["Child", "Positive", "Negative", "Total"],
+      rows: [
+        ["Left", "3", "1", "4"],
+        ["Right", "1", "3", "4"]
+      ]
+    },
     answers: [
       { label: "Left child Gini", value: leftGini },
       { label: "Right child Gini", value: rightGini },
@@ -45341,7 +45369,10 @@ var EXERCISES = [
     title: "Normalization & standardization",
     section: "Feature scaling",
     prompt: "A training feature ranges from 10 to 30. Normalize x = 20 to [0,1]. A different training feature has mean 5 and standard deviation 2; standardize x = 9. Enter the two transformed values.",
-    formula: "Min-max: (x − min) / (max − min); Z-score: (x − μ) / σ",
+    formula: String.raw`\begin{aligned}
+      x_{\text{norm}} &= \frac{x - x_{\min}}{x_{\max} - x_{\min}} \\
+      z &= \frac{x - \mu}{\sigma}
+    \end{aligned}`,
     answers: [
       { label: "Min-max normalized value", value: (20 - 10) / (30 - 10) },
       { label: "Standardized Z-score", value: (9 - 5) / 2 }
@@ -45355,7 +45386,15 @@ var EXERCISES = [
     title: "Confusion-matrix metrics",
     section: "Evaluation calculations",
     prompt: "At a classification threshold, TP = 3, FN = 2, FP = 2, and TN = 3. Calculate accuracy, precision, recall/TPR, specificity, FPR, and F₁.",
-    formula: "Accuracy=(TP+TN)/N; Precision=TP/(TP+FP); Recall=TP/(TP+FN); FPR=FP/(FP+TN); F₁=2PR/(P+R)",
+    formula: String.raw`\begin{aligned}
+      \text{Accuracy} &= \frac{TP + TN}{TP + TN + FP + FN} \\
+      \text{Precision} &= \frac{TP}{TP + FP}
+      &\quad \text{Recall} &= \frac{TP}{TP + FN} \\
+      \text{Specificity} &= \frac{TN}{TN + FP}
+      &\quad FPR &= \frac{FP}{FP + TN} \\
+      F_1 &= 2 \cdot \frac{\text{Precision}\cdot\text{Recall}}
+      {\text{Precision}+\text{Recall}}
+    \end{aligned}`,
     answers: [
       { label: "Accuracy", value: (tp + tn) / (tp + tn + fp + fn) },
       { label: "Precision", value: precision },
@@ -45375,7 +45414,27 @@ var EXERCISES = [
     title: "Plotting ROC points by hand",
     section: "Evaluation calculations",
     prompt: "For the guide’s 10-example dataset, calculate (FPR, TPR) at thresholds 0.7, 0.5, and 0.3. The table gives (TP,FN,FP,TN) as (3,2,0,5), (3,2,2,3), and (5,0,3,2).",
-    formula: "TPR = TP / (TP + FN); FPR = FP / (FP + TN). Plot FPR on x and TPR on y.",
+    formula: String.raw`\begin{aligned}
+      TPR &= \frac{TP}{TP + FN}
+      &\qquad FPR &= \frac{FP}{FP + TN} \\
+      \operatorname{ROC}(T) &= \bigl(FPR(T),\,TPR(T)\bigr)
+    \end{aligned}`,
+    table: {
+      caption: "Actual labels, predicted probabilities, and threshold classifications",
+      headers: ["ID", "Actual (y)", "Probability (ŷ)", "Predicted at T=0.7", "Predicted at T=0.5", "Predicted at T=0.3"],
+      rows: [
+        ["1", "0", "0.10", "0", "0", "0"],
+        ["2", "0", "0.35", "0", "0", "1 (FP)"],
+        ["3", "0", "0.60", "0", "1 (FP)", "1 (FP)"],
+        ["4", "0", "0.20", "0", "0", "0"],
+        ["5", "1", "0.85", "1 (TP)", "1 (TP)", "1 (TP)"],
+        ["6", "1", "0.70", "1 (TP)", "1 (TP)", "1 (TP)"],
+        ["7", "1", "0.40", "0 (FN)", "0 (FN)", "1 (TP)"],
+        ["8", "1", "0.95", "1 (TP)", "1 (TP)", "1 (TP)"],
+        ["9", "0", "0.55", "0", "1 (FP)", "1 (FP)"],
+        ["10", "1", "0.30", "0 (FN)", "0 (FN)", "1 (TP)"]
+      ]
+    },
     answers: [
       { label: "Threshold 0.7 FPR", value: 0 / 5 },
       { label: "Threshold 0.7 TPR", value: 3 / 5 },
@@ -45395,7 +45454,11 @@ var EXERCISES = [
     title: "Minkowski distance & SMOTE",
     section: "Distance and resampling calculations",
     prompt: "For x = (1,2) and y = (4,6), calculate Manhattan (p=1), Euclidean (p=2), and Hamming distances. Then SMOTE-interpolate from (1,2) toward (5,8) using λ = 0.25.",
-    formula: "Lₚ = (Σ |xⱼ − yⱼ|ᵖ)^(1/p); Hamming counts mismatches; xnew = xᵢ + λ(xzi − xᵢ)",
+    formula: String.raw`\begin{aligned}
+      d_p(x,y) &= \left(\sum_{j=1}^{d}|x_j-y_j|^p\right)^{1/p} \\
+      d_0(x,y) &= \sum_{j=1}^{d}\mathbb{1}[x_j \ne y_j] \\
+      x_{\text{new}} &= x_i + \lambda(x_{zi}-x_i)
+    \end{aligned}`,
     answers: [
       { label: "Manhattan distance", value: Math.abs(1 - 4) + Math.abs(2 - 6) },
       { label: "Euclidean distance", value: Math.hypot(1 - 4, 2 - 6) },
@@ -45413,7 +45476,13 @@ var EXERCISES = [
     title: "Linear regression gradient update",
     section: "Gradient descent calculations",
     prompt: "For one example x=2, y=5, θ₀=1, θ₁=1, use L=(y−(θ₀+θ₁x))² and learning rate α=0.1. Calculate the prediction, both loss gradients, and the updated parameters.",
-    formula: "∂L/∂θ₀ = −2(y−ŷ); ∂L/∂θ₁ = −2x(y−ŷ); θ ← θ − α∇L",
+    formula: String.raw`\begin{aligned}
+      \hat{y} &= \theta_0 + \theta_1 x \\
+      \frac{\partial L}{\partial \theta_0} &= -2(y-\hat{y})
+      &\quad \frac{\partial L}{\partial \theta_1} &= -2x(y-\hat{y}) \\
+      \theta_j^{\text{new}} &= \theta_j - \alpha
+      \frac{\partial L}{\partial \theta_j}
+    \end{aligned}`,
     answers: [
       { label: "Prediction ŷ", value: 1 + 1 * 2 },
       { label: "Gradient ∂L/∂θ₀", value: -2 * (5 - (1 + 1 * 2)) },
@@ -45478,7 +45547,16 @@ function renderCalculationLab(container) {
         </div>
         <h3 class="calculation-title">${escapeHtml3(exercise.title)}</h3>
         <p class="calculation-prompt">${escapeHtml3(exercise.prompt)}</p>
-        <p class="calculation-formula">${escapeHtml3(exercise.formula)}</p>
+        ${exercise.table ? `
+          <div class="calculation-table-wrap">
+            <table class="calculation-table">
+              <caption>${escapeHtml3(exercise.table.caption)}</caption>
+              <thead><tr>${exercise.table.headers.map((header) => `<th scope="col">${escapeHtml3(header)}</th>`).join("")}</tr></thead>
+              <tbody>${exercise.table.rows.map((row) => `<tr>${row.map((cell, index) => `<td${index === 0 ? ' class="calculation-table-row-label"' : ""}>${escapeHtml3(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+            </table>
+          </div>
+        ` : ""}
+        <div class="formula-block calculation-formula">\\[${escapeHtml3(exercise.formula)}\\]</div>
         <form data-calc-form novalidate>
           <div class="calculation-input-grid">
             ${exercise.answers.map((answer, index) => `

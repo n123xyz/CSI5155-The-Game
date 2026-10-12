@@ -1276,6 +1276,58 @@ body[data-theme="light"] .game-feedback-error {
   line-height: 1.7;
 }
 
+.calculation-table-wrap {
+  max-width: 100%;
+  margin: 16px 0;
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: rgba(10, 15, 25, 0.42);
+}
+
+.calculation-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+}
+
+.calculation-table caption {
+  padding: 12px 14px 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.calculation-table th,
+.calculation-table td {
+  min-width: 74px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.calculation-table th {
+  background: rgba(0, 240, 255, 0.08);
+  color: var(--accent-cyan);
+  font-weight: 700;
+}
+
+.calculation-table-row-label {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+body[data-theme="light"] .calculation-table-wrap {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+body[data-theme="light"] .calculation-table th {
+  background: rgba(0, 137, 167, 0.09);
+}
+
 .calculation-title {
   margin: 22px 0 8px;
   color: var(--accent-cyan);
@@ -1283,15 +1335,17 @@ body[data-theme="light"] .game-feedback-error {
 }
 
 .calculation-formula {
-  padding: 12px 14px;
-  overflow-wrap: anywhere;
+  margin: 18px 0;
+  padding: 18px;
+  overflow-x: auto;
   border-left: 3px solid var(--accent-purple);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   background: rgba(10, 15, 25, 0.5);
   color: var(--text-primary);
-  font-family: 'Fira Code', monospace;
-  font-size: 13px;
-  line-height: 1.7;
+}
+
+.calculation-formula .katex-display {
+  margin: 0;
 }
 
 .calculation-input-grid {

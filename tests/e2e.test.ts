@@ -473,9 +473,33 @@ async function runTest() {
       'Minkowski distance & SMOTE',
       'Linear regression gradient update',
     ];
+    const expectedTableRowCounts = [7, 2, 0, 0, 10, 0, 0];
     for (let exercise = 0; exercise < calculationAnswers.length; exercise++) {
       if (!(await page.locator('.calculation-title').textContent())?.includes(expectedCalculationTitles[exercise]!)) {
         throw new Error(`Calculation exercise ${exercise + 1} did not match the study guide.`);
+      }
+      const tableRows = page.locator('.calculation-table tbody tr');
+      if (await tableRows.count() !== expectedTableRowCounts[exercise]) {
+        throw new Error(`Calculation exercise ${exercise + 1} should display ${expectedTableRowCounts[exercise]} source-data table rows.`);
+      }
+      if (exercise === 0) {
+        const studentTable = await page.locator('.calculation-table').innerText();
+        if (!studentTable.includes('Study Time') || !studentTable.includes('Sleep Quality') || !studentTable.includes('Pass')) {
+          throw new Error('The entropy exercise should include the original student data table.');
+        }
+      }
+      if (exercise === 4) {
+        const rocTable = await page.locator('.calculation-table').innerText();
+        if (!rocTable.includes('Probability (ŷ)') || !rocTable.includes('1 (FP)') || !rocTable.includes('0.95')) {
+          throw new Error('The ROC exercise should include the original per-example probability and threshold table.');
+        }
+      }
+      await page.locator('.calculation-formula .katex-display').waitFor({ state: 'visible' });
+      if (await page.locator('.calculation-formula .katex-error').count()) {
+        throw new Error(`Calculation exercise ${exercise + 1} contains an invalid KaTeX formula.`);
+      }
+      if (exercise === 0 && !(await page.locator('.calculation-formula .katex annotation[encoding="application/x-tex"]').textContent())?.includes('\\sum')) {
+        throw new Error('The entropy equation should render as structured KaTeX, not plain text.');
       }
       const inputs = page.locator('[data-calc-answer]');
       const answers = calculationAnswers[exercise]!;
