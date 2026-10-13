@@ -463,6 +463,7 @@ async function runTest() {
       [0, 0.6, 0.4, 0.6, 0.6, 1],
       [7, 5, 2, 2, 3.5],
       [3, -4, -8, 1.4, 1.8],
+      [1, 1, 1.414, 3, 2, 1.4, 2.4],
     ];
     const expectedCalculationTitles = [
       'Entropy & information gain',
@@ -472,8 +473,9 @@ async function runTest() {
       'Plotting ROC points by hand',
       'Minkowski distance & SMOTE',
       'Linear regression gradient update',
+      'Question 15: k-NN Classification and SMOTE by Hand',
     ];
-    const expectedTableRowCounts = [7, 2, 0, 0, 10, 0, 0];
+    const expectedTableRowCounts = [7, 2, 0, 0, 10, 0, 0, 5];
     for (let exercise = 0; exercise < calculationAnswers.length; exercise++) {
       if (!(await page.locator('.calculation-title').textContent())?.includes(expectedCalculationTitles[exercise]!)) {
         throw new Error(`Calculation exercise ${exercise + 1} did not match the study guide.`);
@@ -520,8 +522,8 @@ async function runTest() {
       }
       await page.click('[data-calc-next]');
     }
-    if (!(await page.locator('[data-calculation-lab]').textContent())?.includes('7 / 7 solved')) {
-      throw new Error('Calculation Lab should report all seven completed exercises.');
+    if (!(await page.locator('[data-calculation-lab]').textContent())?.includes('8 / 8 solved')) {
+      throw new Error('Calculation Lab should report all eight completed exercises.');
     }
     await page.click('[data-calc-restart]');
     if (!(await page.locator('.calculation-title').textContent())?.includes('Entropy & information gain')) {

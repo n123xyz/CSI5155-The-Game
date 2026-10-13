@@ -45495,6 +45495,43 @@ var EXERCISES = [
       "∂L/∂θ₀ = −2×2 = −4; ∂L/∂θ₁ = −2×2×2 = −8.",
       "Subtract the learning-rate-scaled gradients: θ₀ = 1−0.1(−4)=1.4; θ₁ = 1−0.1(−8)=1.8."
     ]
+  },
+  {
+    title: "Question 15: k-NN Classification and SMOTE by Hand",
+    section: "k-NN & SMOTE calculations",
+    prompt: "Consider a 2D feature space with five training points: p₁=(1,2) [+], p₂=(2,3) [+], p₃=(1,5) [+], p₄=(5,2) [−], p₅=(6,4) [−]. Query point q = (3, 2). Classify q using k=1 and k=3 (+1 for Minority +, −1 for Majority −). Then apply SMOTE with seed p₁=(1,2), neighbor p₂, and λ = 0.40 to calculate the Euclidean distances to p₂ and p₃, and the new synthetic sample coordinates.",
+    formula: String.raw`\begin{aligned}
+      d(p, q) &= \sqrt{(x_1 - q_1)^2 + (x_2 - q_2)^2} \\
+      p_{\text{synth}} &= p_1 + \lambda (p_{\text{neighbor}} - p_1)
+    \end{aligned}`,
+    table: {
+      caption: "Training dataset with minority (+) and majority (−) classes",
+      headers: ["Point", "x₁", "x₂", "Class"],
+      rows: [
+        ["p₁", "1", "2", "Minority (+)"],
+        ["p₂", "2", "3", "Minority (+)"],
+        ["p₃", "1", "5", "Minority (+)"],
+        ["p₄", "5", "2", "Majority (−)"],
+        ["p₅", "6", "4", "Majority (−)"]
+      ]
+    },
+    answers: [
+      { label: "k=1 Predicted Class (+1 for Minority +, −1 for Majority −)", value: 1 },
+      { label: "k=3 Predicted Class (+1 for Minority +, −1 for Majority −)", value: 1 },
+      { label: "Distance from p₁ to p₂: d(p₁, p₂)", value: Math.hypot(2 - 1, 3 - 2) },
+      { label: "Distance from p₁ to p₃: d(p₁, p₃)", value: Math.hypot(1 - 1, 5 - 2) },
+      { label: "1-NN minority neighbor index of p₁ (enter 2 for p₂, 3 for p₃)", value: 2 },
+      { label: "Synthetic sample x₁-coordinate", value: 1 + 0.4 * (2 - 1) },
+      { label: "Synthetic sample x₂-coordinate", value: 2 + 0.4 * (3 - 2) }
+    ],
+    working: [
+      "Distances from q(3,2): d(p₁,q) = √((1−3)²+(2−2)²) = √4 = 2.0; d(p₂,q) = √((2−3)²+(3−2)²) = √2 ≈ 1.414; d(p₃,q) = √((1−3)²+(5−2)²) = √13 ≈ 3.606; d(p₄,q) = √((5−3)²+(2−2)²) = √4 = 2.0; d(p₅,q) = √((6−3)²+(4−2)²) = √13 ≈ 3.606.",
+      "For k = 1: Closest neighbor is p₂ (dist ≈ 1.414), which is Minority (+). Class = +1.",
+      "For k = 3: Nearest 3 neighbors are p₂ (dist ≈ 1.414, +), p₁ (dist = 2.0, +), and p₄ (dist = 2.0, −). Minority (+) has 2 votes vs Majority (−) with 1 vote. Majority vote is Minority (+), so Class = +1.",
+      "Distances from seed p₁(1,2) to other minority points: d(p₁,p₂) = √((2−1)²+(3−2)²) = √2 ≈ 1.414; d(p₁,p₃) = √((1−1)²+(5−2)²) = √9 = 3.0.",
+      "1-nearest minority neighbor to p₁ is p₂ (dist √2 ≈ 1.414 < 3.0), so neighbor index = 2.",
+      "SMOTE interpolation with λ = 0.40: p_synth = (1, 2) + 0.40 × ((2, 3) − (1, 2)) = (1, 2) + 0.40 × (1, 1) = (1 + 0.40, 2 + 0.40) = (1.40, 2.40)."
+    ]
   }
 ];
 function escapeHtml3(value) {
